@@ -8,7 +8,7 @@ from protoc_gen_mojo.gen.google.protobuf.descriptor import *
 
 
 @fieldwise_init
-struct Version(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct Version(ProtoSerializable, Copyable):
     var major: Optional[Int32]
     var minor: Optional[Int32]
     var patch: Optional[Int32]
@@ -51,7 +51,7 @@ struct Version(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct CodeGeneratorRequest(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct CodeGeneratorRequest(ProtoSerializable, Copyable):
     var file_to_generate: List[String]
     var parameter: Optional[String]
     var proto_file: List[FileDescriptorProto]
@@ -109,7 +109,7 @@ struct CodeGeneratorRequest(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct CodeGeneratorResponseFile(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct CodeGeneratorResponseFile(ProtoSerializable, Copyable):
     var name: Optional[String]
     var insertion_point: Optional[String]
     var content: Optional[String]
@@ -179,7 +179,7 @@ struct Feature(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct CodeGeneratorResponse(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct CodeGeneratorResponse(ProtoSerializable, Copyable):
     var error: Optional[String]
     var supported_features: Optional[UInt64]
     var minimum_edition: Optional[Int32]

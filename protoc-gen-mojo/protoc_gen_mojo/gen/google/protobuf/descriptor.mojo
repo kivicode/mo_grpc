@@ -49,7 +49,7 @@ struct Edition(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FileDescriptorSet(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FileDescriptorSet(ProtoSerializable, Copyable):
     var file: List[FileDescriptorProto]
 
     def __init__(out self):
@@ -77,7 +77,7 @@ struct FileDescriptorSet(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FileDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FileDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var package: Optional[String]
     var dependency: List[String]
@@ -202,7 +202,7 @@ struct FileDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct DescriptorProtoExtensionRange(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct DescriptorProtoExtensionRange(ProtoSerializable, Copyable):
     var start: Optional[Int32]
     var end: Optional[Int32]
     var options: Optional[ExtensionRangeOptions]
@@ -242,7 +242,7 @@ struct DescriptorProtoExtensionRange(ProtoSerializable, Copyable, ImplicitlyCopy
 
 
 @fieldwise_init
-struct DescriptorProtoReservedRange(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct DescriptorProtoReservedRange(ProtoSerializable, Copyable):
     var start: Optional[Int32]
     var end: Optional[Int32]
 
@@ -273,7 +273,7 @@ struct DescriptorProtoReservedRange(ProtoSerializable, Copyable, ImplicitlyCopya
 
 
 @fieldwise_init
-struct DescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct DescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var field: List[FieldDescriptorProto]
     var extension: List[FieldDescriptorProto]
@@ -376,7 +376,7 @@ struct DescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct ExtensionRangeOptionsDeclaration(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct ExtensionRangeOptionsDeclaration(ProtoSerializable, Copyable):
     var number: Optional[Int32]
     var full_name: Optional[String]
     var type: Optional[String]
@@ -447,7 +447,7 @@ struct VerificationState(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct ExtensionRangeOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct ExtensionRangeOptions(ProtoSerializable, Copyable):
     var uninterpreted_option: List[UninterpretedOption]
     var declaration: List[ExtensionRangeOptionsDeclaration]
     var features: Optional[FeatureSet]
@@ -577,7 +577,7 @@ struct Label(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FieldDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FieldDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var number: Optional[Int32]
     var label: Optional[Label]
@@ -665,7 +665,7 @@ struct FieldDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct OneofDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct OneofDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var options: Optional[OneofOptions]
 
@@ -699,7 +699,7 @@ struct OneofDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct EnumDescriptorProtoEnumReservedRange(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct EnumDescriptorProtoEnumReservedRange(ProtoSerializable, Copyable):
     var start: Optional[Int32]
     var end: Optional[Int32]
 
@@ -730,7 +730,7 @@ struct EnumDescriptorProtoEnumReservedRange(ProtoSerializable, Copyable, Implici
 
 
 @fieldwise_init
-struct EnumDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct EnumDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var value: List[EnumValueDescriptorProto]
     var options: Optional[EnumOptions]
@@ -788,7 +788,7 @@ struct EnumDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct EnumValueDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct EnumValueDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var number: Optional[Int32]
     var options: Optional[EnumValueOptions]
@@ -828,7 +828,7 @@ struct EnumValueDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable)
 
 
 @fieldwise_init
-struct ServiceDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct ServiceDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var method: List[MethodDescriptorProto]
     var options: Optional[ServiceOptions]
@@ -871,7 +871,7 @@ struct ServiceDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct MethodDescriptorProto(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct MethodDescriptorProto(ProtoSerializable, Copyable):
     var name: Optional[String]
     var input_type: Optional[String]
     var output_type: Optional[String]
@@ -953,7 +953,7 @@ struct OptimizeMode(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FileOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FileOptions(ProtoSerializable, Copyable):
     var java_package: Optional[String]
     var java_outer_classname: Optional[String]
     var java_multiple_files: Optional[Bool]
@@ -1104,7 +1104,7 @@ struct FileOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct MessageOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct MessageOptions(ProtoSerializable, Copyable):
     var message_set_wire_format: Optional[Bool]
     var no_standard_descriptor_accessor: Optional[Bool]
     var deprecated: Optional[Bool]
@@ -1171,7 +1171,7 @@ struct MessageOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FieldOptionsEditionDefault(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FieldOptionsEditionDefault(ProtoSerializable, Copyable):
     var edition: Optional[Edition]
     var value: Optional[String]
 
@@ -1202,7 +1202,7 @@ struct FieldOptionsEditionDefault(ProtoSerializable, Copyable, ImplicitlyCopyabl
 
 
 @fieldwise_init
-struct FieldOptionsFeatureSupport(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FieldOptionsFeatureSupport(ProtoSerializable, Copyable):
     var edition_introduced: Optional[Edition]
     var edition_deprecated: Optional[Edition]
     var deprecation_warning: Optional[String]
@@ -1355,7 +1355,7 @@ struct OptionTargetType(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FieldOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FieldOptions(ProtoSerializable, Copyable):
     var ctype: Optional[CType]
     var packed: Optional[Bool]
     var jstype: Optional[JSType]
@@ -1475,7 +1475,7 @@ struct FieldOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct OneofOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct OneofOptions(ProtoSerializable, Copyable):
     var features: Optional[FeatureSet]
     var uninterpreted_option: List[UninterpretedOption]
 
@@ -1512,7 +1512,7 @@ struct OneofOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct EnumOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct EnumOptions(ProtoSerializable, Copyable):
     var allow_alias: Optional[Bool]
     var deprecated: Optional[Bool]
     var deprecated_legacy_json_field_conflicts: Optional[Bool]
@@ -1567,7 +1567,7 @@ struct EnumOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct EnumValueOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct EnumValueOptions(ProtoSerializable, Copyable):
     var deprecated: Optional[Bool]
     var features: Optional[FeatureSet]
     var debug_redact: Optional[Bool]
@@ -1625,7 +1625,7 @@ struct EnumValueOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct ServiceOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct ServiceOptions(ProtoSerializable, Copyable):
     var features: Optional[FeatureSet]
     var deprecated: Optional[Bool]
     var uninterpreted_option: List[UninterpretedOption]
@@ -1692,7 +1692,7 @@ struct IdempotencyLevel(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct MethodOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct MethodOptions(ProtoSerializable, Copyable):
     var deprecated: Optional[Bool]
     var idempotency_level: Optional[IdempotencyLevel]
     var features: Optional[FeatureSet]
@@ -1741,7 +1741,7 @@ struct MethodOptions(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct UninterpretedOptionNamePart(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct UninterpretedOptionNamePart(ProtoSerializable, Copyable):
     var name_part: String
     var is_extension: Bool
 
@@ -1770,7 +1770,7 @@ struct UninterpretedOptionNamePart(ProtoSerializable, Copyable, ImplicitlyCopyab
 
 
 @fieldwise_init
-struct UninterpretedOption(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct UninterpretedOption(ProtoSerializable, Copyable):
     var name: List[UninterpretedOptionNamePart]
     var identifier_value: Optional[String]
     var positive_int_value: Optional[UInt64]
@@ -1980,7 +1980,7 @@ struct JsonFormat(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FeatureSet(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FeatureSet(ProtoSerializable, Copyable):
     var field_presence: Optional[FieldPresence]
     var enum_type: Optional[EnumType]
     var repeated_field_encoding: Optional[RepeatedFieldEncoding]
@@ -2035,7 +2035,7 @@ struct FeatureSet(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct FeatureSetDefaultsFeatureSetEditionDefault(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FeatureSetDefaultsFeatureSetEditionDefault(ProtoSerializable, Copyable):
     var edition: Optional[Edition]
     var overridable_features: Optional[FeatureSet]
     var fixed_features: Optional[FeatureSet]
@@ -2078,7 +2078,7 @@ struct FeatureSetDefaultsFeatureSetEditionDefault(ProtoSerializable, Copyable, I
 
 
 @fieldwise_init
-struct FeatureSetDefaults(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct FeatureSetDefaults(ProtoSerializable, Copyable):
     var defaults: List[FeatureSetDefaultsFeatureSetEditionDefault]
     var minimum_edition: Optional[Edition]
     var maximum_edition: Optional[Edition]
@@ -2118,7 +2118,7 @@ struct FeatureSetDefaults(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct SourceCodeInfoLocation(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct SourceCodeInfoLocation(ProtoSerializable, Copyable):
     var path: List[Int32]
     var span: List[Int32]
     var leading_comments: Optional[String]
@@ -2177,7 +2177,7 @@ struct SourceCodeInfoLocation(ProtoSerializable, Copyable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct SourceCodeInfo(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct SourceCodeInfo(ProtoSerializable, Copyable):
     var location: List[SourceCodeInfoLocation]
 
     def __init__(out self):
@@ -2229,7 +2229,7 @@ struct Semantic(ProtoSerializable, Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct GeneratedCodeInfoAnnotation(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct GeneratedCodeInfoAnnotation(ProtoSerializable, Copyable):
     var path: List[Int32]
     var source_file: Optional[String]
     var begin: Optional[Int32]
@@ -2283,7 +2283,7 @@ struct GeneratedCodeInfoAnnotation(ProtoSerializable, Copyable, ImplicitlyCopyab
 
 
 @fieldwise_init
-struct GeneratedCodeInfo(ProtoSerializable, Copyable, ImplicitlyCopyable):
+struct GeneratedCodeInfo(ProtoSerializable, Copyable):
     var annotation: List[GeneratedCodeInfoAnnotation]
 
     def __init__(out self):

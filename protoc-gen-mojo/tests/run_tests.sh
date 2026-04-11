@@ -55,4 +55,9 @@ echo "=== oneof tests ==="
 "$MOJO" run -I "$REPO" -I tests/gen tests/test_oneof.mojo 2>&1 | grep -Ev "$NOISE"
 [ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
 
+echo ""
+echo "=== grpc frame tests ==="
+"$MOJO" run -I "$REPO" tests/test_grpc_frame.mojo 2>&1 | grep -Ev "$NOISE"
+[ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
+
 exit $OVERALL

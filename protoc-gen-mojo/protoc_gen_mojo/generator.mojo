@@ -250,7 +250,7 @@ def get_oneof_fields(
 
 def generate_oneof_union(union_type: String, fields: List[OneofField], indent: Int = 0) -> String:
     """Generate a discriminant-tagged union struct for one oneof group."""
-    var out = ts(t"struct {union_type}(Copyable, ImplicitlyCopyable):\n")
+    var out = ts(t"struct {union_type}(Copyable):\n")
     out += "    var _tag: Int\n"
     for of in fields:
         out += ts(t"    var _{of.field_name}: Optional[{of.mojo_type}]\n")
@@ -266,7 +266,7 @@ def generate_oneof_union(union_type: String, fields: List[OneofField], indent: I
         out += ts(t"    def {of.field_name}(v: {of.mojo_type}) -> Self:\n")
         out += "        var s = Self()\n"
         out += ts(t"        s._tag = {tag}\n")
-        out += ts(t"        s._{of.field_name} = v\n")
+        out += ts(t"        s._{of.field_name} = v.copy()\n")
         out += "        return s^\n"
         tag += 1
 
@@ -275,7 +275,10 @@ def generate_oneof_union(union_type: String, fields: List[OneofField], indent: I
         out += ts(t"\n    def is_{of.field_name}(self) -> Bool:\n")
         out += ts(t"        return self._tag == {tag}\n")
         out += ts(t"\n    def get_{of.field_name}(self) -> {of.mojo_type}:\n")
-        out += ts(t"        return self._{of.field_name}.value()\n")
+        if of.is_message:
+            out += ts(t"        return self._{of.field_name}.value().copy()\n")
+        else:
+            out += ts(t"        return self._{of.field_name}.value()\n")
         tag += 1
 
     return apply_indent(out, indent)
@@ -388,7 +391,7 @@ def generate_message(
 
     # struct fields
     var out = String("@fieldwise_init\n")
-    out += ts(t"struct {full}(ProtoSerializable, Copyable, ImplicitlyCopyable):\n")
+    out += ts(t"struct {full}(ProtoSerializable, Copyable):\n")
     if len(desc.field) == 0 and len(oneof_by_fnum) == 0:
         out += "    ...\n"
     else:
@@ -582,10 +585,9 @@ def generate_message(
                 if not already:
                     seen_oneof_ser.append(oi)
                     var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
-                    var utype = full + capitalize_first(oname)
                     var group = get_oneof_fields(desc, oi, renamings, scalar_types, read_fns)
                     out += ts(t"        if self.{oname}:\n")
-                    out += ts(t"            var pu = self.{oname}.value()\n")
+                    out += ts(t"            var pu = self.{oname}.value().copy()\n")
                     var gfirst = True
                     for gf in group:
                         var gnum  = String(Int(gf.field_number))
@@ -600,6 +602,8 @@ def generate_message(
                             out += ts(t"                writer.write_int32({gnum}, Int32(pu.get_{gf.field_name}()._value))\n")
                         else:
                             out += ts(t"                writer.write_{gf.read_fn}({gnum}, pu.get_{gf.field_name}())\n")
+                continue   # skip per-field serialize for oneof members
+
             if me_ser:
                 var e = me_ser.value()
                 out += ts(t"        for item in self.{fname}.items():\n")
