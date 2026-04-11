@@ -7,20 +7,31 @@ from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable
 
 
 @fieldwise_init
-struct Edition(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct Edition(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime EDITION_UNKNOWN = Edition(0)
+
     comptime EDITION_LEGACY = Edition(900)
+
     comptime EDITION_PROTO2 = Edition(998)
+
     comptime EDITION_PROTO3 = Edition(999)
+
     comptime EDITION_2023 = Edition(1000)
+
     comptime EDITION_2024 = Edition(1001)
+
     comptime EDITION_1_TEST_ONLY = Edition(1)
+
     comptime EDITION_2_TEST_ONLY = Edition(2)
+
     comptime EDITION_99997_TEST_ONLY = Edition(99997)
+
     comptime EDITION_99998_TEST_ONLY = Edition(99998)
+
     comptime EDITION_99999_TEST_ONLY = Edition(99999)
+
     comptime EDITION_MAX = Edition(2147483647)
 
     @staticmethod
@@ -36,10 +47,11 @@ struct Edition(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct FileDescriptorSet(ProtoSerializable, Copyable):
+struct FileDescriptorSet(Copyable, ProtoSerializable):
     var file: List[FileDescriptorProto]
-    
+
     def __init__(out self):
         self.file = List[FileDescriptorProto]()
 
@@ -48,7 +60,7 @@ struct FileDescriptorSet(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 var sub = reader.read_message()
                 instance.file.append(FileDescriptorProto.parse(sub))
@@ -63,8 +75,9 @@ struct FileDescriptorSet(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(1, sub)
 
+
 @fieldwise_init
-struct FileDescriptorProto(ProtoSerializable, Copyable):
+struct FileDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var package: Optional[String]
     var dependency: List[String]
@@ -78,7 +91,7 @@ struct FileDescriptorProto(ProtoSerializable, Copyable):
     var source_code_info: Optional[SourceCodeInfo]
     var syntax: Optional[String]
     var edition: Optional[Edition]
-    
+
     def __init__(out self):
         self.name = None
         self.package = None
@@ -99,7 +112,7 @@ struct FileDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -187,12 +200,13 @@ struct FileDescriptorProto(ProtoSerializable, Copyable):
         if self.edition:
             writer.write_int32(14, Int32(self.edition.value()._value))
 
+
 @fieldwise_init
-struct DescriptorProtoExtensionRange(ProtoSerializable, Copyable):
+struct DescriptorProtoExtensionRange(Copyable, ProtoSerializable):
     var start: Optional[Int32]
     var end: Optional[Int32]
     var options: Optional[ExtensionRangeOptions]
-    
+
     def __init__(out self):
         self.start = None
         self.end = None
@@ -203,7 +217,7 @@ struct DescriptorProtoExtensionRange(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.start = reader.read_int32()
             elif field_number == 2:
@@ -226,11 +240,12 @@ struct DescriptorProtoExtensionRange(ProtoSerializable, Copyable):
             self.options.value().serialize(sub)
             writer.write_message(3, sub)
 
+
 @fieldwise_init
-struct DescriptorProtoReservedRange(ProtoSerializable, Copyable):
+struct DescriptorProtoReservedRange(Copyable, ProtoSerializable):
     var start: Optional[Int32]
     var end: Optional[Int32]
-    
+
     def __init__(out self):
         self.start = None
         self.end = None
@@ -240,7 +255,7 @@ struct DescriptorProtoReservedRange(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.start = reader.read_int32()
             elif field_number == 2:
@@ -256,8 +271,9 @@ struct DescriptorProtoReservedRange(ProtoSerializable, Copyable):
         if self.end:
             writer.write_int32(2, self.end.value())
 
+
 @fieldwise_init
-struct DescriptorProto(ProtoSerializable, Copyable):
+struct DescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var field: List[FieldDescriptorProto]
     var extension: List[FieldDescriptorProto]
@@ -268,7 +284,7 @@ struct DescriptorProto(ProtoSerializable, Copyable):
     var options: Optional[MessageOptions]
     var reserved_range: List[DescriptorProtoReservedRange]
     var reserved_name: List[String]
-    
+
     def __init__(out self):
         self.name = None
         self.field = List[FieldDescriptorProto]()
@@ -286,7 +302,7 @@ struct DescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -358,14 +374,15 @@ struct DescriptorProto(ProtoSerializable, Copyable):
         for item in self.reserved_name:
             writer.write_string(10, item)
 
+
 @fieldwise_init
-struct ExtensionRangeOptionsDeclaration(ProtoSerializable, Copyable):
+struct ExtensionRangeOptionsDeclaration(Copyable, ProtoSerializable):
     var number: Optional[Int32]
     var full_name: Optional[String]
     var type: Optional[String]
     var reserved: Optional[Bool]
     var repeated: Optional[Bool]
-    
+
     def __init__(out self):
         self.number = None
         self.full_name = None
@@ -378,7 +395,7 @@ struct ExtensionRangeOptionsDeclaration(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.number = reader.read_int32()
             elif field_number == 2:
@@ -406,11 +423,13 @@ struct ExtensionRangeOptionsDeclaration(ProtoSerializable, Copyable):
         if self.repeated:
             writer.write_bool(6, self.repeated.value())
 
+
 @fieldwise_init
-struct VerificationState(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct VerificationState(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime DECLARATION = VerificationState(0)
+
     comptime UNVERIFIED = VerificationState(1)
 
     @staticmethod
@@ -426,13 +445,14 @@ struct VerificationState(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct ExtensionRangeOptions(ProtoSerializable, Copyable):
+struct ExtensionRangeOptions(Copyable, ProtoSerializable):
     var uninterpreted_option: List[UninterpretedOption]
     var declaration: List[ExtensionRangeOptionsDeclaration]
     var features: Optional[FeatureSet]
     var verification: Optional[VerificationState]
-    
+
     def __init__(out self):
         self.uninterpreted_option = List[UninterpretedOption]()
         self.declaration = List[ExtensionRangeOptionsDeclaration]()
@@ -444,7 +464,7 @@ struct ExtensionRangeOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 999:
                 var sub = reader.read_message()
                 instance.uninterpreted_option.append(UninterpretedOption.parse(sub))
@@ -477,27 +497,45 @@ struct ExtensionRangeOptions(ProtoSerializable, Copyable):
         if self.verification:
             writer.write_int32(3, Int32(self.verification.value()._value))
 
+
 @fieldwise_init
-struct Type(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct Type(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime TYPE_DOUBLE = Type(1)
+
     comptime TYPE_FLOAT = Type(2)
+
     comptime TYPE_INT64 = Type(3)
+
     comptime TYPE_UINT64 = Type(4)
+
     comptime TYPE_INT32 = Type(5)
+
     comptime TYPE_FIXED64 = Type(6)
+
     comptime TYPE_FIXED32 = Type(7)
+
     comptime TYPE_BOOL = Type(8)
+
     comptime TYPE_STRING = Type(9)
+
     comptime TYPE_GROUP = Type(10)
+
     comptime TYPE_MESSAGE = Type(11)
+
     comptime TYPE_BYTES = Type(12)
+
     comptime TYPE_UINT32 = Type(13)
+
     comptime TYPE_ENUM = Type(14)
+
     comptime TYPE_SFIXED32 = Type(15)
+
     comptime TYPE_SFIXED64 = Type(16)
+
     comptime TYPE_SINT32 = Type(17)
+
     comptime TYPE_SINT64 = Type(18)
 
     @staticmethod
@@ -513,12 +551,15 @@ struct Type(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct Label(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct Label(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime LABEL_OPTIONAL = Label(1)
+
     comptime LABEL_REPEATED = Label(3)
+
     comptime LABEL_REQUIRED = Label(2)
 
     @staticmethod
@@ -534,8 +575,9 @@ struct Label(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct FieldDescriptorProto(ProtoSerializable, Copyable):
+struct FieldDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var number: Optional[Int32]
     var label: Optional[Label]
@@ -547,7 +589,7 @@ struct FieldDescriptorProto(ProtoSerializable, Copyable):
     var json_name: Optional[String]
     var options: Optional[FieldOptions]
     var proto3_optional: Optional[Bool]
-    
+
     def __init__(out self):
         self.name = None
         self.number = None
@@ -566,7 +608,7 @@ struct FieldDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 3:
@@ -621,11 +663,12 @@ struct FieldDescriptorProto(ProtoSerializable, Copyable):
         if self.proto3_optional:
             writer.write_bool(17, self.proto3_optional.value())
 
+
 @fieldwise_init
-struct OneofDescriptorProto(ProtoSerializable, Copyable):
+struct OneofDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var options: Optional[OneofOptions]
-    
+
     def __init__(out self):
         self.name = None
         self.options = None
@@ -635,7 +678,7 @@ struct OneofDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -654,11 +697,12 @@ struct OneofDescriptorProto(ProtoSerializable, Copyable):
             self.options.value().serialize(sub)
             writer.write_message(2, sub)
 
+
 @fieldwise_init
-struct EnumDescriptorProtoEnumReservedRange(ProtoSerializable, Copyable):
+struct EnumDescriptorProtoEnumReservedRange(Copyable, ProtoSerializable):
     var start: Optional[Int32]
     var end: Optional[Int32]
-    
+
     def __init__(out self):
         self.start = None
         self.end = None
@@ -668,7 +712,7 @@ struct EnumDescriptorProtoEnumReservedRange(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.start = reader.read_int32()
             elif field_number == 2:
@@ -684,14 +728,15 @@ struct EnumDescriptorProtoEnumReservedRange(ProtoSerializable, Copyable):
         if self.end:
             writer.write_int32(2, self.end.value())
 
+
 @fieldwise_init
-struct EnumDescriptorProto(ProtoSerializable, Copyable):
+struct EnumDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var value: List[EnumValueDescriptorProto]
     var options: Optional[EnumOptions]
     var reserved_range: List[EnumDescriptorProtoEnumReservedRange]
     var reserved_name: List[String]
-    
+
     def __init__(out self):
         self.name = None
         self.value = List[EnumValueDescriptorProto]()
@@ -704,7 +749,7 @@ struct EnumDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -741,12 +786,13 @@ struct EnumDescriptorProto(ProtoSerializable, Copyable):
         for item in self.reserved_name:
             writer.write_string(5, item)
 
+
 @fieldwise_init
-struct EnumValueDescriptorProto(ProtoSerializable, Copyable):
+struct EnumValueDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var number: Optional[Int32]
     var options: Optional[EnumValueOptions]
-    
+
     def __init__(out self):
         self.name = None
         self.number = None
@@ -757,7 +803,7 @@ struct EnumValueDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -780,12 +826,13 @@ struct EnumValueDescriptorProto(ProtoSerializable, Copyable):
             self.options.value().serialize(sub)
             writer.write_message(3, sub)
 
+
 @fieldwise_init
-struct ServiceDescriptorProto(ProtoSerializable, Copyable):
+struct ServiceDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var method: List[MethodDescriptorProto]
     var options: Optional[ServiceOptions]
-    
+
     def __init__(out self):
         self.name = None
         self.method = List[MethodDescriptorProto]()
@@ -796,7 +843,7 @@ struct ServiceDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -822,15 +869,16 @@ struct ServiceDescriptorProto(ProtoSerializable, Copyable):
             self.options.value().serialize(sub)
             writer.write_message(3, sub)
 
+
 @fieldwise_init
-struct MethodDescriptorProto(ProtoSerializable, Copyable):
+struct MethodDescriptorProto(Copyable, ProtoSerializable):
     var name: Optional[String]
     var input_type: Optional[String]
     var output_type: Optional[String]
     var options: Optional[MethodOptions]
     var client_streaming: Optional[Bool]
     var server_streaming: Optional[Bool]
-    
+
     def __init__(out self):
         self.name = None
         self.input_type = None
@@ -844,7 +892,7 @@ struct MethodDescriptorProto(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -879,12 +927,15 @@ struct MethodDescriptorProto(ProtoSerializable, Copyable):
         if self.server_streaming:
             writer.write_bool(6, self.server_streaming.value())
 
+
 @fieldwise_init
-struct OptimizeMode(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct OptimizeMode(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime SPEED = OptimizeMode(1)
+
     comptime CODE_SIZE = OptimizeMode(2)
+
     comptime LITE_RUNTIME = OptimizeMode(3)
 
     @staticmethod
@@ -900,8 +951,9 @@ struct OptimizeMode(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct FileOptions(ProtoSerializable, Copyable):
+struct FileOptions(Copyable, ProtoSerializable):
     var java_package: Optional[String]
     var java_outer_classname: Optional[String]
     var java_multiple_files: Optional[Bool]
@@ -923,7 +975,7 @@ struct FileOptions(ProtoSerializable, Copyable):
     var ruby_package: Optional[String]
     var features: Optional[FeatureSet]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.java_package = None
         self.java_outer_classname = None
@@ -952,7 +1004,7 @@ struct FileOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.java_package = reader.read_string()
             elif field_number == 8:
@@ -1050,8 +1102,9 @@ struct FileOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct MessageOptions(ProtoSerializable, Copyable):
+struct MessageOptions(Copyable, ProtoSerializable):
     var message_set_wire_format: Optional[Bool]
     var no_standard_descriptor_accessor: Optional[Bool]
     var deprecated: Optional[Bool]
@@ -1059,7 +1112,7 @@ struct MessageOptions(ProtoSerializable, Copyable):
     var deprecated_legacy_json_field_conflicts: Optional[Bool]
     var features: Optional[FeatureSet]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.message_set_wire_format = None
         self.no_standard_descriptor_accessor = None
@@ -1074,7 +1127,7 @@ struct MessageOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.message_set_wire_format = reader.read_bool()
             elif field_number == 2:
@@ -1116,11 +1169,12 @@ struct MessageOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct FieldOptionsEditionDefault(ProtoSerializable, Copyable):
+struct FieldOptionsEditionDefault(Copyable, ProtoSerializable):
     var edition: Optional[Edition]
     var value: Optional[String]
-    
+
     def __init__(out self):
         self.edition = None
         self.value = None
@@ -1130,7 +1184,7 @@ struct FieldOptionsEditionDefault(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 3:
                 instance.edition = Edition(Int(reader.read_enum()))
             elif field_number == 2:
@@ -1146,13 +1200,14 @@ struct FieldOptionsEditionDefault(ProtoSerializable, Copyable):
         if self.value:
             writer.write_string(2, self.value.value())
 
+
 @fieldwise_init
-struct FieldOptionsFeatureSupport(ProtoSerializable, Copyable):
+struct FieldOptionsFeatureSupport(Copyable, ProtoSerializable):
     var edition_introduced: Optional[Edition]
     var edition_deprecated: Optional[Edition]
     var deprecation_warning: Optional[String]
     var edition_removed: Optional[Edition]
-    
+
     def __init__(out self):
         self.edition_introduced = None
         self.edition_deprecated = None
@@ -1164,7 +1219,7 @@ struct FieldOptionsFeatureSupport(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.edition_introduced = Edition(Int(reader.read_enum()))
             elif field_number == 2:
@@ -1188,12 +1243,15 @@ struct FieldOptionsFeatureSupport(ProtoSerializable, Copyable):
         if self.edition_removed:
             writer.write_int32(4, Int32(self.edition_removed.value()._value))
 
+
 @fieldwise_init
-struct CType(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct CType(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime STRING = CType(0)
+
     comptime CORD = CType(1)
+
     comptime STRING_PIECE = CType(2)
 
     @staticmethod
@@ -1209,12 +1267,15 @@ struct CType(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct JSType(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct JSType(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime JS_NORMAL = JSType(0)
+
     comptime JS_STRING = JSType(1)
+
     comptime JS_NUMBER = JSType(2)
 
     @staticmethod
@@ -1230,12 +1291,15 @@ struct JSType(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct OptionRetention(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct OptionRetention(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime RETENTION_UNKNOWN = OptionRetention(0)
+
     comptime RETENTION_RUNTIME = OptionRetention(1)
+
     comptime RETENTION_SOURCE = OptionRetention(2)
 
     @staticmethod
@@ -1251,19 +1315,29 @@ struct OptionRetention(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct OptionTargetType(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct OptionTargetType(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime TARGET_TYPE_UNKNOWN = OptionTargetType(0)
+
     comptime TARGET_TYPE_FILE = OptionTargetType(1)
+
     comptime TARGET_TYPE_EXTENSION_RANGE = OptionTargetType(2)
+
     comptime TARGET_TYPE_MESSAGE = OptionTargetType(3)
+
     comptime TARGET_TYPE_FIELD = OptionTargetType(4)
+
     comptime TARGET_TYPE_ONEOF = OptionTargetType(5)
+
     comptime TARGET_TYPE_ENUM = OptionTargetType(6)
+
     comptime TARGET_TYPE_ENUM_ENTRY = OptionTargetType(7)
+
     comptime TARGET_TYPE_SERVICE = OptionTargetType(8)
+
     comptime TARGET_TYPE_METHOD = OptionTargetType(9)
 
     @staticmethod
@@ -1279,8 +1353,9 @@ struct OptionTargetType(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct FieldOptions(ProtoSerializable, Copyable):
+struct FieldOptions(Copyable, ProtoSerializable):
     var ctype: Optional[CType]
     var packed: Optional[Bool]
     var jstype: Optional[JSType]
@@ -1295,7 +1370,7 @@ struct FieldOptions(ProtoSerializable, Copyable):
     var features: Optional[FeatureSet]
     var feature_support: Optional[FieldOptionsFeatureSupport]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.ctype = None
         self.packed = None
@@ -1317,7 +1392,7 @@ struct FieldOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.ctype = CType(Int(reader.read_enum()))
             elif field_number == 2:
@@ -1398,11 +1473,12 @@ struct FieldOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct OneofOptions(ProtoSerializable, Copyable):
+struct OneofOptions(Copyable, ProtoSerializable):
     var features: Optional[FeatureSet]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.features = None
         self.uninterpreted_option = List[UninterpretedOption]()
@@ -1412,7 +1488,7 @@ struct OneofOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 var sub = reader.read_message()
                 instance.features = FeatureSet.parse(sub)
@@ -1434,14 +1510,15 @@ struct OneofOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct EnumOptions(ProtoSerializable, Copyable):
+struct EnumOptions(Copyable, ProtoSerializable):
     var allow_alias: Optional[Bool]
     var deprecated: Optional[Bool]
     var deprecated_legacy_json_field_conflicts: Optional[Bool]
     var features: Optional[FeatureSet]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.allow_alias = None
         self.deprecated = None
@@ -1454,7 +1531,7 @@ struct EnumOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 2:
                 instance.allow_alias = reader.read_bool()
             elif field_number == 3:
@@ -1488,14 +1565,15 @@ struct EnumOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct EnumValueOptions(ProtoSerializable, Copyable):
+struct EnumValueOptions(Copyable, ProtoSerializable):
     var deprecated: Optional[Bool]
     var features: Optional[FeatureSet]
     var debug_redact: Optional[Bool]
     var feature_support: Optional[FieldOptionsFeatureSupport]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.deprecated = None
         self.features = None
@@ -1508,7 +1586,7 @@ struct EnumValueOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.deprecated = reader.read_bool()
             elif field_number == 2:
@@ -1545,12 +1623,13 @@ struct EnumValueOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct ServiceOptions(ProtoSerializable, Copyable):
+struct ServiceOptions(Copyable, ProtoSerializable):
     var features: Optional[FeatureSet]
     var deprecated: Optional[Bool]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.features = None
         self.deprecated = None
@@ -1561,7 +1640,7 @@ struct ServiceOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 34:
                 var sub = reader.read_message()
                 instance.features = FeatureSet.parse(sub)
@@ -1587,12 +1666,15 @@ struct ServiceOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct IdempotencyLevel(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct IdempotencyLevel(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime IDEMPOTENCY_UNKNOWN = IdempotencyLevel(0)
+
     comptime NO_SIDE_EFFECTS = IdempotencyLevel(1)
+
     comptime IDEMPOTENT = IdempotencyLevel(2)
 
     @staticmethod
@@ -1608,13 +1690,14 @@ struct IdempotencyLevel(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct MethodOptions(ProtoSerializable, Copyable):
+struct MethodOptions(Copyable, ProtoSerializable):
     var deprecated: Optional[Bool]
     var idempotency_level: Optional[IdempotencyLevel]
     var features: Optional[FeatureSet]
     var uninterpreted_option: List[UninterpretedOption]
-    
+
     def __init__(out self):
         self.deprecated = None
         self.idempotency_level = None
@@ -1626,7 +1709,7 @@ struct MethodOptions(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 33:
                 instance.deprecated = reader.read_bool()
             elif field_number == 34:
@@ -1656,11 +1739,12 @@ struct MethodOptions(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(999, sub)
 
+
 @fieldwise_init
-struct UninterpretedOptionNamePart(ProtoSerializable, Copyable):
+struct UninterpretedOptionNamePart(Copyable, ProtoSerializable):
     var name_part: String
     var is_extension: Bool
-    
+
     def __init__(out self):
         self.name_part = String()
         self.is_extension = False
@@ -1670,7 +1754,7 @@ struct UninterpretedOptionNamePart(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name_part = reader.read_string()
             elif field_number == 2:
@@ -1684,8 +1768,9 @@ struct UninterpretedOptionNamePart(ProtoSerializable, Copyable):
         writer.write_string(1, self.name_part)
         writer.write_bool(2, self.is_extension)
 
+
 @fieldwise_init
-struct UninterpretedOption(ProtoSerializable, Copyable):
+struct UninterpretedOption(Copyable, ProtoSerializable):
     var name: List[UninterpretedOptionNamePart]
     var identifier_value: Optional[String]
     var positive_int_value: Optional[UInt64]
@@ -1693,7 +1778,7 @@ struct UninterpretedOption(ProtoSerializable, Copyable):
     var double_value: Optional[Float64]
     var string_value: Optional[List[UInt8]]
     var aggregate_value: Optional[String]
-    
+
     def __init__(out self):
         self.name = List[UninterpretedOptionNamePart]()
         self.identifier_value = None
@@ -1708,7 +1793,7 @@ struct UninterpretedOption(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 2:
                 var sub = reader.read_message()
                 instance.name.append(UninterpretedOptionNamePart.parse(sub))
@@ -1747,13 +1832,17 @@ struct UninterpretedOption(ProtoSerializable, Copyable):
         if self.aggregate_value:
             writer.write_string(8, self.aggregate_value.value())
 
+
 @fieldwise_init
-struct FieldPresence(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct FieldPresence(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime FIELD_PRESENCE_UNKNOWN = FieldPresence(0)
+
     comptime EXPLICIT = FieldPresence(1)
+
     comptime IMPLICIT = FieldPresence(2)
+
     comptime LEGACY_REQUIRED = FieldPresence(3)
 
     @staticmethod
@@ -1769,12 +1858,15 @@ struct FieldPresence(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct EnumType(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct EnumType(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime ENUM_TYPE_UNKNOWN = EnumType(0)
+
     comptime OPEN = EnumType(1)
+
     comptime CLOSED = EnumType(2)
 
     @staticmethod
@@ -1790,12 +1882,15 @@ struct EnumType(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct RepeatedFieldEncoding(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct RepeatedFieldEncoding(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime REPEATED_FIELD_ENCODING_UNKNOWN = RepeatedFieldEncoding(0)
+
     comptime PACKED = RepeatedFieldEncoding(1)
+
     comptime EXPANDED = RepeatedFieldEncoding(2)
 
     @staticmethod
@@ -1811,12 +1906,15 @@ struct RepeatedFieldEncoding(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct Utf8Validation(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct Utf8Validation(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime UTF8_VALIDATION_UNKNOWN = Utf8Validation(0)
+
     comptime VERIFY = Utf8Validation(2)
+
     comptime NONE = Utf8Validation(3)
 
     @staticmethod
@@ -1832,12 +1930,15 @@ struct Utf8Validation(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct MessageEncoding(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct MessageEncoding(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime MESSAGE_ENCODING_UNKNOWN = MessageEncoding(0)
+
     comptime LENGTH_PREFIXED = MessageEncoding(1)
+
     comptime DELIMITED = MessageEncoding(2)
 
     @staticmethod
@@ -1853,12 +1954,15 @@ struct MessageEncoding(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct JsonFormat(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct JsonFormat(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime JSON_FORMAT_UNKNOWN = JsonFormat(0)
+
     comptime ALLOW = JsonFormat(1)
+
     comptime LEGACY_BEST_EFFORT = JsonFormat(2)
 
     @staticmethod
@@ -1874,15 +1978,16 @@ struct JsonFormat(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct FeatureSet(ProtoSerializable, Copyable):
+struct FeatureSet(Copyable, ProtoSerializable):
     var field_presence: Optional[FieldPresence]
     var enum_type: Optional[EnumType]
     var repeated_field_encoding: Optional[RepeatedFieldEncoding]
     var utf8_validation: Optional[Utf8Validation]
     var message_encoding: Optional[MessageEncoding]
     var json_format: Optional[JsonFormat]
-    
+
     def __init__(out self):
         self.field_presence = None
         self.enum_type = None
@@ -1896,7 +2001,7 @@ struct FeatureSet(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.field_presence = FieldPresence(Int(reader.read_enum()))
             elif field_number == 2:
@@ -1928,12 +2033,13 @@ struct FeatureSet(ProtoSerializable, Copyable):
         if self.json_format:
             writer.write_int32(6, Int32(self.json_format.value()._value))
 
+
 @fieldwise_init
-struct FeatureSetDefaultsFeatureSetEditionDefault(ProtoSerializable, Copyable):
+struct FeatureSetDefaultsFeatureSetEditionDefault(Copyable, ProtoSerializable):
     var edition: Optional[Edition]
     var overridable_features: Optional[FeatureSet]
     var fixed_features: Optional[FeatureSet]
-    
+
     def __init__(out self):
         self.edition = None
         self.overridable_features = None
@@ -1944,7 +2050,7 @@ struct FeatureSetDefaultsFeatureSetEditionDefault(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 3:
                 instance.edition = Edition(Int(reader.read_enum()))
             elif field_number == 4:
@@ -1970,12 +2076,13 @@ struct FeatureSetDefaultsFeatureSetEditionDefault(ProtoSerializable, Copyable):
             self.fixed_features.value().serialize(sub)
             writer.write_message(5, sub)
 
+
 @fieldwise_init
-struct FeatureSetDefaults(ProtoSerializable, Copyable):
+struct FeatureSetDefaults(Copyable, ProtoSerializable):
     var defaults: List[FeatureSetDefaultsFeatureSetEditionDefault]
     var minimum_edition: Optional[Edition]
     var maximum_edition: Optional[Edition]
-    
+
     def __init__(out self):
         self.defaults = List[FeatureSetDefaultsFeatureSetEditionDefault]()
         self.minimum_edition = None
@@ -1986,7 +2093,7 @@ struct FeatureSetDefaults(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 var sub = reader.read_message()
                 instance.defaults.append(FeatureSetDefaultsFeatureSetEditionDefault.parse(sub))
@@ -2009,14 +2116,15 @@ struct FeatureSetDefaults(ProtoSerializable, Copyable):
         if self.maximum_edition:
             writer.write_int32(5, Int32(self.maximum_edition.value()._value))
 
+
 @fieldwise_init
-struct SourceCodeInfoLocation(ProtoSerializable, Copyable):
+struct SourceCodeInfoLocation(Copyable, ProtoSerializable):
     var path: List[Int32]
     var span: List[Int32]
     var leading_comments: Optional[String]
     var trailing_comments: Optional[String]
     var leading_detached_comments: List[String]
-    
+
     def __init__(out self):
         self.path = List[Int32]()
         self.span = List[Int32]()
@@ -2029,7 +2137,7 @@ struct SourceCodeInfoLocation(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 if wire_type.value == 2:
                     var packed = reader.read_message()
@@ -2067,10 +2175,11 @@ struct SourceCodeInfoLocation(ProtoSerializable, Copyable):
         for item in self.leading_detached_comments:
             writer.write_string(6, item)
 
+
 @fieldwise_init
-struct SourceCodeInfo(ProtoSerializable, Copyable):
+struct SourceCodeInfo(Copyable, ProtoSerializable):
     var location: List[SourceCodeInfoLocation]
-    
+
     def __init__(out self):
         self.location = List[SourceCodeInfoLocation]()
 
@@ -2079,7 +2188,7 @@ struct SourceCodeInfo(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 var sub = reader.read_message()
                 instance.location.append(SourceCodeInfoLocation.parse(sub))
@@ -2094,12 +2203,15 @@ struct SourceCodeInfo(ProtoSerializable, Copyable):
             item.serialize(sub)
             writer.write_message(1, sub)
 
+
 @fieldwise_init
-struct Semantic(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct Semantic(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime NONE = Semantic(0)
+
     comptime SET = Semantic(1)
+
     comptime ALIAS = Semantic(2)
 
     @staticmethod
@@ -2115,14 +2227,15 @@ struct Semantic(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct GeneratedCodeInfoAnnotation(ProtoSerializable, Copyable):
+struct GeneratedCodeInfoAnnotation(Copyable, ProtoSerializable):
     var path: List[Int32]
     var source_file: Optional[String]
     var begin: Optional[Int32]
     var end: Optional[Int32]
     var semantic: Optional[Semantic]
-    
+
     def __init__(out self):
         self.path = List[Int32]()
         self.source_file = None
@@ -2135,7 +2248,7 @@ struct GeneratedCodeInfoAnnotation(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 if wire_type.value == 2:
                     var packed = reader.read_message()
@@ -2168,10 +2281,11 @@ struct GeneratedCodeInfoAnnotation(ProtoSerializable, Copyable):
         if self.semantic:
             writer.write_int32(5, Int32(self.semantic.value()._value))
 
+
 @fieldwise_init
-struct GeneratedCodeInfo(ProtoSerializable, Copyable):
+struct GeneratedCodeInfo(Copyable, ProtoSerializable):
     var annotation: List[GeneratedCodeInfoAnnotation]
-    
+
     def __init__(out self):
         self.annotation = List[GeneratedCodeInfoAnnotation]()
 
@@ -2180,7 +2294,7 @@ struct GeneratedCodeInfo(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 var sub = reader.read_message()
                 instance.annotation.append(GeneratedCodeInfoAnnotation.parse(sub))
