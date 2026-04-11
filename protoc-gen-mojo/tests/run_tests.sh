@@ -26,15 +26,17 @@ OVERALL=0
 
 # ── generate test protos ──────────────────────────────────────────────────────
 echo "=== generating test protos ==="
-if protoc -I tests/assets \
-    --plugin=protoc-gen-mojo="$PLUGIN_WRAPPER" \
-    --mojo_out=tests/gen \
-    person.proto 2>/dev/null; then
-  echo "  PASS  generate person.proto"
-else
-  echo "  FAIL  generate person.proto"
-  OVERALL=1
-fi
+for proto in person.proto oneof_test.proto; do
+  if protoc -I tests/assets \
+      --plugin=protoc-gen-mojo="$PLUGIN_WRAPPER" \
+      --mojo_out=tests/gen \
+      "$proto" 2>/dev/null; then
+    echo "  PASS  generate $proto"
+  else
+    echo "  FAIL  generate $proto"
+    OVERALL=1
+  fi
+done
 
 # ── runtime tests ─────────────────────────────────────────────────────────────
 echo ""
@@ -46,6 +48,11 @@ echo "=== runtime tests ==="
 echo ""
 echo "=== codegen roundtrip tests ==="
 "$MOJO" run -I "$REPO" -I tests/gen tests/test_codegen.mojo 2>&1 | grep -Ev "$NOISE"
+[ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
+
+echo ""
+echo "=== oneof tests ==="
+"$MOJO" run -I "$REPO" -I tests/gen tests/test_oneof.mojo 2>&1 | grep -Ev "$NOISE"
 [ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
 
 exit $OVERALL

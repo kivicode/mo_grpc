@@ -4,9 +4,18 @@ from protoc_gen_mojo.gen.google.protobuf.descriptor import (
     DescriptorProto,
     EnumDescriptorProto,
     FieldDescriptorProto,
+    OneofDescriptorProto,
+    ServiceDescriptorProto,
+    MethodDescriptorProto,
     Type,
     Label,
 )
+
+
+def ts[T: Writable](s: T) -> String:
+    var out = String()
+    out.write(s)
+    return out^
 
 
 @fieldwise_init
@@ -20,10 +29,17 @@ struct MapEntry(Copyable, ImplicitlyCopyable):
     var val_is_enum: Bool
 
 
+@fieldwise_init
+struct OneofField(Copyable, ImplicitlyCopyable):
+    var field_name:   String   # proto field name
+    var field_number: Int32
+    var mojo_type:    String   # base mojo type without Optional/List wrapping
+    var read_fn:      String  
+    var is_message:   Bool
+    var is_enum:      Bool
+
+
 comptime Renamings = Dict[String, String]
-
-
-# ── type maps (built once in generate_file) ────────────────────────────────────
 
 
 def make_scalar_types() -> Dict[Int, String]:
@@ -108,6 +124,18 @@ def apply_indent(code: String, indent: Int) -> String:
     return result
 
 
+def capitalize_first(s: String) -> String:
+    var b = s.as_bytes()
+    if len(b) == 0:
+        return s
+    var out = List[UInt8]()
+    var c = b[0]
+    out.append(c - 32 if c >= 97 and c <= 122 else c)   # a-z -> A-Z
+    for i in range(1, len(b)):
+        out.append(b[i])
+    return String(unsafe_from_utf8=out^)
+
+
 # ── field type resolution ──────────────────────────────────────────────────────
 
 
@@ -145,7 +173,7 @@ def field_full_type(
 
 
 def proto_path_to_module(path: String, prefix: String = "") -> String:
-    """'google/protobuf/descriptor.proto' → 'google.protobuf.descriptor' (with optional prefix)."""
+    """'google/protobuf/descriptor.proto' -> 'google.protobuf.descriptor' (with optional prefix)."""
     var b = path.as_bytes()
     var out = List[UInt8]()
     var end = len(b) - 6  # strip .proto suffix
@@ -175,7 +203,7 @@ def get_map_entry(
     return map_entries[entry_name]
 
 
-def generate_prelude(deps: List[String], module_prefix: String = "") -> String:
+def generate_prelude(deps: List[String], module_prefix: String = "", has_services: Bool = False) -> String:
     var out = (
         '"""\n'
         "   AUTO-GENERATED CODE\n"
@@ -184,35 +212,100 @@ def generate_prelude(deps: List[String], module_prefix: String = "") -> String:
         "from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable\n"
     )
     for dep in deps:
-        out += "from " + proto_path_to_module(dep, module_prefix) + " import *\n"
+        var mod = proto_path_to_module(dep, module_prefix)
+        out += ts(t"from {mod} import *\n")
+    if has_services:
+        out += "from grpc_runtime import GrpcChannel, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
     return out
+
+
+# ── oneof helpers ──────────────────────────────────────────────────────────────
+
+def get_oneof_fields(
+    desc: DescriptorProto,
+    oneof_idx: Int,
+    renamings: Renamings,
+    scalar_types: Dict[Int, String],
+    read_fns: Dict[Int, String],
+) -> List[OneofField]:
+    """Return fields belonging to oneof group `oneof_idx`, excluding synthetic proto3 optionals."""
+    var result = List[OneofField]()
+    for f in desc.field:
+        if not f.oneof_index:
+            continue
+        if f.proto3_optional and f.proto3_optional.value():
+            continue
+        if Int(f.oneof_index.value()) != oneof_idx:
+            continue
+        result.append(OneofField(
+            f.name.value() if f.name else "unknown",
+            f.number.value() if f.number else Int32(0),
+            field_base_type(f, renamings, scalar_types),
+            read_fns.get(f.type.value()._value if f.type else 0, "Unknown"),
+            f.type and f.type.value() == Type.TYPE_MESSAGE,
+            f.type and f.type.value() == Type.TYPE_ENUM,
+        ))
+    return result^
+
+
+def generate_oneof_union(union_type: String, fields: List[OneofField], indent: Int = 0) -> String:
+    """Generate a discriminant-tagged union struct for one oneof group."""
+    var out = ts(t"struct {union_type}(Copyable, ImplicitlyCopyable):\n")
+    out += "    var _tag: Int\n"
+    for of in fields:
+        out += ts(t"    var _{of.field_name}: Optional[{of.mojo_type}]\n")
+
+    out += "\n    def __init__(out self):\n"
+    out += "        self._tag = 0\n"
+    for of in fields:
+        out += ts(t"        self._{of.field_name} = None\n")
+
+    var tag = 1
+    for of in fields:
+        out += "\n    @staticmethod\n"
+        out += ts(t"    def {of.field_name}(v: {of.mojo_type}) -> Self:\n")
+        out += "        var s = Self()\n"
+        out += ts(t"        s._tag = {tag}\n")
+        out += ts(t"        s._{of.field_name} = v\n")
+        out += "        return s^\n"
+        tag += 1
+
+    tag = 1
+    for of in fields:
+        out += ts(t"\n    def is_{of.field_name}(self) -> Bool:\n")
+        out += ts(t"        return self._tag == {tag}\n")
+        out += ts(t"\n    def get_{of.field_name}(self) -> {of.mojo_type}:\n")
+        out += ts(t"        return self._{of.field_name}.value()\n")
+        tag += 1
+
+    return apply_indent(out, indent)
 
 
 def generate_enum(desc: EnumDescriptorProto, indent: Int = 0) -> String:
     var name = desc.name.value() if desc.name else "Unknown"
 
-    var out = "@fieldwise_init\nstruct " + name + "(ProtoSerializable, Equatable, ImplicitlyCopyable):\n"
+    var out = String("@fieldwise_init\n")
+    out += ts(t"struct {name}(ProtoSerializable, Equatable, ImplicitlyCopyable):\n")
     out += "    var _value: Int\n"
     for opt in desc.value:
         var oname = opt.name.value() if opt.name else "UNKNOWN"
         var oval = String(Int(opt.number.value())) if opt.number else "0"
-        out += "    \n    comptime " + oname + " = " + name + "(" + oval + ")\n"
+        out += "    \n"
+        out += ts(t"    comptime {oname} = {name}({oval})\n")
 
-    out += (
-        "\n"
-        "    @staticmethod\n"
-        "    def parse(mut reader: ProtoReader) raises -> Self:\n"
-        "        return Self(Int(reader.read_enum()))\n"
-        "\n"
-        "    def serialize(self, mut writer: ProtoWriter):\n"
-        "        writer.write_varint(UInt64(self._value))\n"
-        "\n"
-        "    def __eq__(self, other: Self) -> Bool:\n"
-        "        return self._value == other._value\n"
-        "\n"
-        "    def __ne__(self, other: Self) -> Bool:\n"
-        "        return not (self == other)\n"
-    )
+    out += "\n"
+    out += "    @staticmethod\n"
+    out += "    def parse(mut reader: ProtoReader) raises -> Self:\n"
+    out += "        return Self(Int(reader.read_enum()))\n"
+    out += "\n"
+    out += "    def serialize(self, mut writer: ProtoWriter):\n"
+    out += "        writer.write_varint(UInt64(self._value))\n"
+    out += "\n"
+    out += "    def __eq__(self, other: Self) -> Bool:\n"
+    out += "        return self._value == other._value\n"
+    out += "\n"
+    out += "    def __ne__(self, other: Self) -> Bool:\n"
+    out += "        return not (self == other)\n"
     return apply_indent(out, indent)
 
 
@@ -266,7 +359,25 @@ def generate_message(
                 prefix + name + (inner.name.value() if inner.name else "")
             )
 
+    # ── detect real oneof groups (skip proto3 synthetic optionals) ────────────
+    # field_number -> oneof_index for fields in real oneofs
+    var oneof_by_fnum = Dict[Int, Int]()
+    var num_oneofs = len(desc.oneof_decl)
+    for i in range(num_oneofs):
+        var fields = get_oneof_fields(desc, i, renamings, scalar_types, read_fns)
+        for of in fields:
+            oneof_by_fnum[Int(of.field_number)] = i
+
     var parts = List[String]()
+
+    # emit oneof union structs before the parent struct
+    for i in range(num_oneofs):
+        var oname = desc.oneof_decl[i].name.value() if desc.oneof_decl[i].name else "Oneof" + String(i)
+        var fields = get_oneof_fields(desc, i, renamings, scalar_types, read_fns)
+        if len(fields) > 0:
+            var union_type = full + capitalize_first(oname)
+            parts.append(apply_indent(generate_oneof_union(union_type, fields), indent))
+
     for inner in desc.nested_type:
         var is_map_entry = inner.options and inner.options.value().map_entry and inner.options.value().map_entry.value()
         if not is_map_entry:
@@ -276,35 +387,63 @@ def generate_message(
         parts.append(generate_enum(inner, indent))
 
     # struct fields
-    var out = "@fieldwise_init\nstruct " + full + "(ProtoSerializable, Copyable):\n"
-    if len(desc.field) == 0:
+    var out = String("@fieldwise_init\n")
+    out += ts(t"struct {full}(ProtoSerializable, Copyable, ImplicitlyCopyable):\n")
+    if len(desc.field) == 0 and len(oneof_by_fnum) == 0:
         out += "    ...\n"
     else:
+        var seen_oneof_indices = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
+            var fnum  = Int(f.number.value()) if f.number else 0
             var me = get_map_entry(map_entries, f, full)
-            if me:
+            if fnum in oneof_by_fnum:
+                var oi = oneof_by_fnum[fnum]
+                var already = False
+                for s in seen_oneof_indices:
+                    if s == oi:
+                        already = True
+                        break
+                if not already:
+                    seen_oneof_indices.append(oi)
+                    var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
+                    var union_type = full + capitalize_first(oname)
+                    out += ts(t"    var {oname}: Optional[{union_type}]\n")
+            elif me:
                 var e = me.value()
-                out += "    var " + fname + ": Dict[" + e.key_mojo_type + ", " + e.val_mojo_type + "]\n"
+                out += ts(t"    var {fname}: Dict[{e.key_mojo_type}, {e.val_mojo_type}]\n")
             else:
-                out += "    var " + fname + ": " + field_full_type(f, renamings, scalar_types) + "\n"
+                var ftype = field_full_type(f, renamings, scalar_types)
+                out += ts(t"    var {fname}: {ftype}\n")
 
-    # __init__ with defaults (needed for Self() in parse)
-    if len(desc.field) > 0:
+    if len(desc.field) > 0 or len(oneof_by_fnum) > 0:
         out += "\n    def __init__(out self):\n"
+        var seen_oneof_init = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
+            var fnum  = Int(f.number.value()) if f.number else 0
             var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
             var is_opt = f.label and f.label.value() == Label.LABEL_OPTIONAL
             var me = get_map_entry(map_entries, f, full)
-            if me:
+            if fnum in oneof_by_fnum:
+                var oi = oneof_by_fnum[fnum]
+                var already = False
+                for s in seen_oneof_init:
+                    if s == oi:
+                        already = True
+                        break
+                if not already:
+                    seen_oneof_init.append(oi)
+                    var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
+                    out += ts(t"        self.{oname} = None\n")
+            elif me:
                 var e = me.value()
-                out += "        self." + fname + " = Dict[" + e.key_mojo_type + ", " + e.val_mojo_type + "]()\n"
+                out += ts(t"        self.{fname} = Dict[{e.key_mojo_type}, {e.val_mojo_type}]()\n")
             elif is_rep:
                 var base = field_base_type(f, renamings, scalar_types)
-                out += "        self." + fname + " = List[" + base + "]()\n"
+                out += ts(t"        self.{fname} = List[{base}]()\n")
             elif is_opt:
-                out += "        self." + fname + " = None\n"
+                out += ts(t"        self.{fname} = None\n")
             else:  # required
                 var zero: String
                 if f.type and f.type.value() == Type.TYPE_STRING:
@@ -315,98 +454,109 @@ def generate_message(
                     zero = "0.0"
                 else:
                     zero = "0"
-                out += "        self." + fname + " = " + zero + "\n"
+                out += ts(t"        self.{fname} = {zero}\n")
 
     # parse
-    out += (
-        "\n"
-        "    @staticmethod\n"
-        "    def parse(mut reader: ProtoReader) raises -> Self:\n"
-        "        var instance = Self()\n"
-        "        while reader.has_more():\n"
-        "            var field_number, wire_type = reader.read_tag()\n"
-        "            \n"
-    )
+    out += "\n"
+    out += "    @staticmethod\n"
+    out += "    def parse(mut reader: ProtoReader) raises -> Self:\n"
+    out += "        var instance = Self()\n"
+    out += "        while reader.has_more():\n"
+    out += "            var field_number, wire_type = reader.read_tag()\n"
+    out += "            \n"
     var first = True
     for f in desc.field:
         var fname = f.name.value() if f.name else "unknown"
-        var num = String(Int(f.number.value())) if f.number else "0"
-        var base = field_base_type(f, renamings, scalar_types)
-        out += "            " + ("if" if first else "elif") + " field_number == " + num + ":\n"
+        var num   = String(Int(f.number.value())) if f.number else "0"
+        var fnum  = Int(f.number.value()) if f.number else 0
+        var base  = field_base_type(f, renamings, scalar_types)
+        var branch = "if" if first else "elif"
+        out += ts(t"            {branch} field_number == {num}:\n")
+        first = False  
+
+        if fnum in oneof_by_fnum:
+            var oi    = oneof_by_fnum[fnum]
+            var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
+            var utype = full + capitalize_first(oname)
+            if f.type and f.type.value() == Type.TYPE_MESSAGE:
+                out += "                var sub = reader.read_message()\n"
+                out += ts(t"                instance.{oname} = {utype}.{fname}({base}.parse(sub))\n")
+            elif f.type and f.type.value() == Type.TYPE_ENUM:
+                out += ts(t"                instance.{oname} = {utype}.{fname}({base}(Int(reader.read_enum())))\n")
+            else:
+                var rdfn = read_fns.get(f.type.value()._value if f.type else 0, "Unknown")
+                out += ts(t"                instance.{oname} = {utype}.{fname}(reader.read_{rdfn}())\n")
+            continue
         var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
         var me_parse = get_map_entry(map_entries, f, full)
         if me_parse:
             var e = me_parse.value()
-            # Map field: read sub-message, extract key+value, insert into Dict
             out += "                var entry = reader.read_message()\n"
-            out += (
-                "                var map_key = " + e.key_mojo_type + "()\n" if e.key_mojo_type
-                != "String" else "                var map_key = String()\n"
-            )
-            out += (
-                "                var map_val = "
-                + e.val_mojo_type
-                + "()\n" if (not e.val_is_message and e.val_mojo_type != "String") else ""
-            )
+            if e.key_mojo_type != "String":
+                out += ts(t"                var map_key = {e.key_mojo_type}()\n")
+            else:
+                out += "                var map_key = String()\n"
             if e.val_is_message:
-                out += "                var map_val_opt = Optional[" + e.val_mojo_type + "](None)\n"
-            elif e.val_mojo_type == "String":
+                out += ts(t"                var map_val_opt = Optional[{e.val_mojo_type}](None)\n")
+            elif e.val_mojo_type != "String":
+                out += ts(t"                var map_val = {e.val_mojo_type}()\n")
+            else:
                 out += "                var map_val = String()\n"
             out += "                while entry.has_more():\n"
             out += "                    var kfn, kwt = entry.read_tag()\n"
             out += "                    if kfn == 1:\n"
             if e.key_is_enum:
-                out += "                        map_key = " + e.key_mojo_type + "(Int(entry.read_enum()))\n"
+                out += ts(t"                        map_key = {e.key_mojo_type}(Int(entry.read_enum()))\n")
             else:
-                out += "                        map_key = entry.read_" + e.key_read_fn + "()\n"
+                out += ts(t"                        map_key = entry.read_{e.key_read_fn}()\n")
             out += "                    elif kfn == 2:\n"
             if e.val_is_message:
                 out += "                        var vsub = entry.read_message()\n"
-                out += "                        map_val_opt = " + e.val_mojo_type + ".parse(vsub)\n"
+                out += ts(t"                        map_val_opt = {e.val_mojo_type}.parse(vsub)\n")
             elif e.val_is_enum:
-                out += "                        map_val = " + e.val_mojo_type + "(Int(entry.read_enum()))\n"
+                out += ts(t"                        map_val = {e.val_mojo_type}(Int(entry.read_enum()))\n")
             else:
-                out += "                        map_val = entry.read_" + e.val_read_fn + "()\n"
+                out += ts(t"                        map_val = entry.read_{e.val_read_fn}()\n")
             out += "                    else:\n"
             out += "                        entry.skip_field(kwt)\n"
             if e.val_is_message:
                 out += "                if map_val_opt:\n"
-                out += "                    instance." + fname + "[map_key] = map_val_opt.value()\n"
+                out += ts(t"                    instance.{fname}[map_key] = map_val_opt.value()\n")
             else:
-                out += "                instance." + fname + "[map_key] = map_val\n"
+                out += ts(t"                instance.{fname}[map_key] = map_val\n")
         elif f.type and f.type.value() == Type.TYPE_MESSAGE:
             out += "                var sub = reader.read_message()\n"
             if is_rep:
-                out += "                instance." + fname + ".append(" + base + ".parse(sub))\n"
+                out += ts(t"                instance.{fname}.append({base}.parse(sub))\n")
             else:
-                out += "                instance." + fname + " = " + base + ".parse(sub)\n"
+                out += ts(t"                instance.{fname} = {base}.parse(sub)\n")
         elif f.type and f.type.value() == Type.TYPE_ENUM:
             if is_rep:
                 out += "                if wire_type.value == 2:\n"
                 out += "                    var packed = reader.read_message()\n"
                 out += "                    while packed.has_more():\n"
-                out += "                        instance." + fname + ".append(" + base + "(Int(packed.read_enum())))\n"
+                out += ts(t"                        instance.{fname}.append({base}(Int(packed.read_enum())))\n")
                 out += "                else:\n"
-                out += "                    instance." + fname + ".append(" + base + "(Int(reader.read_enum())))\n"
+                out += ts(t"                    instance.{fname}.append({base}(Int(reader.read_enum())))\n")
             else:
-                out += "                instance." + fname + " = " + base + "(Int(reader.read_enum()))\n"
+                out += ts(t"                instance.{fname} = {base}(Int(reader.read_enum()))\n")
         else:
             var fn_name = read_fns.get(f.type.value()._value if f.type else 0, "Unknown")
             if is_rep:
                 if fn_name == "string" or fn_name == "bytes":
-                    # strings/bytes are always LEN_DELIM, never packed
-                    out += "                instance." + fname + ".append(reader.read_" + fn_name + "())\n"
+                    out += ts(t"                instance.{fname}.append(reader.read_{fn_name}())\n")
                 else:
                     out += "                if wire_type.value == 2:\n"
                     out += "                    var packed = reader.read_message()\n"
                     out += "                    while packed.has_more():\n"
-                    out += "                        instance." + fname + ".append(packed.read_" + fn_name + "())\n"
+                    out += ts(t"                        instance.{fname}.append(packed.read_{fn_name}())\n")
                     out += "                else:\n"
-                    out += "                    instance." + fname + ".append(reader.read_" + fn_name + "())\n"
+                    out += ts(t"                    instance.{fname}.append(reader.read_{fn_name}())\n")
             else:
-                out += "                instance." + fname + " = reader.read_" + fn_name + "()\n"
-        first = False
-    out += "            else:\n                reader.skip_field(wire_type)\n        return instance^\n"
+                out += ts(t"                instance.{fname} = reader.read_{fn_name}()\n")
+    out += "            else:\n"
+    out += "                reader.skip_field(wire_type)\n"
+    out += "        return instance^\n"
 
     # serialize
     out += "\n    def serialize(self, mut writer: ProtoWriter):\n"
@@ -414,20 +564,50 @@ def generate_message(
         out += "        ...\n"
     else:
         out += "        var sub = ProtoWriter()\n"
+        var seen_oneof_ser = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
-            var num = String(Int(f.number.value())) if f.number else "0"
+            var num   = String(Int(f.number.value())) if f.number else "0"
+            var fnum  = Int(f.number.value()) if f.number else 0
             var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
             var is_opt = f.label and f.label.value() == Label.LABEL_OPTIONAL
             var me_ser = get_map_entry(map_entries, f, full)
+            if fnum in oneof_by_fnum:
+                var oi = oneof_by_fnum[fnum]
+                var already = False
+                for s in seen_oneof_ser:
+                    if s == oi:
+                        already = True
+                        break
+                if not already:
+                    seen_oneof_ser.append(oi)
+                    var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
+                    var utype = full + capitalize_first(oname)
+                    var group = get_oneof_fields(desc, oi, renamings, scalar_types, read_fns)
+                    out += ts(t"        if self.{oname}:\n")
+                    out += ts(t"            var pu = self.{oname}.value()\n")
+                    var gfirst = True
+                    for gf in group:
+                        var gnum  = String(Int(gf.field_number))
+                        var gbranch = "if" if gfirst else "elif"
+                        out += ts(t"            {gbranch} pu.is_{gf.field_name}():\n")
+                        gfirst = False
+                        if gf.is_message:
+                            out += "                sub = ProtoWriter()\n"
+                            out += ts(t"                pu.get_{gf.field_name}().serialize(sub)\n")
+                            out += ts(t"                writer.write_message({gnum}, sub)\n")
+                        elif gf.is_enum:
+                            out += ts(t"                writer.write_int32({gnum}, Int32(pu.get_{gf.field_name}()._value))\n")
+                        else:
+                            out += ts(t"                writer.write_{gf.read_fn}({gnum}, pu.get_{gf.field_name}())\n")
             if me_ser:
                 var e = me_ser.value()
-                out += "        for item in self." + fname + ".items():\n"
+                out += ts(t"        for item in self.{fname}.items():\n")
                 out += "            sub = ProtoWriter()\n"
                 if e.key_is_enum:
                     out += "            sub.write_int32(1, Int32(item.key._value))\n"
                 else:
-                    out += "            sub.write_" + e.key_read_fn + "(1, item.key)\n"
+                    out += ts(t"            sub.write_{e.key_read_fn}(1, item.key)\n")
                 if e.val_is_message:
                     out += "            var vsub = ProtoWriter()\n"
                     out += "            item.value.serialize(vsub)\n"
@@ -435,45 +615,95 @@ def generate_message(
                 elif e.val_is_enum:
                     out += "            sub.write_int32(2, Int32(item.value._value))\n"
                 else:
-                    out += "            sub.write_" + e.val_read_fn + "(2, item.value)\n"
-                out += "            writer.write_message(" + num + ", sub)\n"
+                    out += ts(t"            sub.write_{e.val_read_fn}(2, item.value)\n")
+                out += ts(t"            writer.write_message({num}, sub)\n")
             elif f.type and f.type.value() == Type.TYPE_MESSAGE:
                 if is_rep:
-                    out += "        for item in self." + fname + ":\n"
+                    out += ts(t"        for item in self.{fname}:\n")
                     out += "            sub = ProtoWriter()\n"
                     out += "            item.serialize(sub)\n"
-                    out += "            writer.write_message(" + num + ", sub)\n"
+                    out += ts(t"            writer.write_message({num}, sub)\n")
                 elif is_opt:
-                    out += "        if self." + fname + ":\n"
+                    out += ts(t"        if self.{fname}:\n")
                     out += "            sub = ProtoWriter()\n"
-                    out += "            self." + fname + ".value().serialize(sub)\n"
-                    out += "            writer.write_message(" + num + ", sub)\n"
+                    out += ts(t"            self.{fname}.value().serialize(sub)\n")
+                    out += ts(t"            writer.write_message({num}, sub)\n")
                 else:  # required message
                     out += "        sub = ProtoWriter()\n"
-                    out += "        self." + fname + ".serialize(sub)\n"
-                    out += "        writer.write_message(" + num + ", sub)\n"
+                    out += ts(t"        self.{fname}.serialize(sub)\n")
+                    out += ts(t"        writer.write_message({num}, sub)\n")
             elif f.type and f.type.value() == Type.TYPE_ENUM:
                 if is_rep:
-                    out += "        for item in self." + fname + ":\n"
-                    out += "            writer.write_int32(" + num + ", Int32(item._value))\n"
+                    out += ts(t"        for item in self.{fname}:\n")
+                    out += ts(t"            writer.write_int32({num}, Int32(item._value))\n")
                 elif is_opt:
-                    out += "        if self." + fname + ":\n"
-                    out += "            writer.write_int32(" + num + ", Int32(self." + fname + ".value()._value))\n"
+                    out += ts(t"        if self.{fname}:\n")
+                    out += ts(t"            writer.write_int32({num}, Int32(self.{fname}.value()._value))\n")
                 else:  # required enum
-                    out += "        writer.write_int32(" + num + ", Int32(self." + fname + "._value))\n"
+                    out += ts(t"        writer.write_int32({num}, Int32(self.{fname}._value))\n")
             else:
                 var fn_name = read_fns.get(f.type.value()._value if f.type else 0, "Unknown")
                 if is_rep:
-                    out += "        for item in self." + fname + ":\n"
-                    out += "            writer.write_" + fn_name + "(" + num + ", item)\n"
+                    out += ts(t"        for item in self.{fname}:\n")
+                    out += ts(t"            writer.write_{fn_name}({num}, item)\n")
                 elif is_opt:
-                    out += "        if self." + fname + ":\n"
-                    out += "            writer.write_" + fn_name + "(" + num + ", self." + fname + ".value())\n"
+                    out += ts(t"        if self.{fname}:\n")
+                    out += ts(t"            writer.write_{fn_name}({num}, self.{fname}.value())\n")
                 else:
-                    out += "        writer.write_" + fn_name + "(" + num + ", self." + fname + ")\n"
+                    out += ts(t"        writer.write_{fn_name}({num}, self.{fname})\n")
 
     parts.append(apply_indent(out, indent))
     return parts^
+
+
+def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
+    """Generate a server trait and client stub for one service."""
+    var name       = svc.name.value() if svc.name else "Unknown"
+    var pkg_prefix = "/" + package + "." if len(package) > 0 else "/"
+
+    var out = ts(t"trait {name}Servicer:\n")
+    for m in svc.method:
+        var mname = m.name.value() if m.name else "Unknown"
+        var req   = last_component(m.input_type.value() if m.input_type else "")
+        var resp  = last_component(m.output_type.value() if m.output_type else "")
+        var cs    = m.client_streaming and m.client_streaming.value()
+        var ss    = m.server_streaming and m.server_streaming.value()
+        if not cs and not ss:
+            out += ts(t"    def {mname}(self, request: {req}) raises -> {resp}: ...\n")
+        elif not cs and ss:
+            out += ts(t"    def {mname}(self, request: {req}, ctx: GrpcServerStream[{resp}]) raises: ...\n")
+        elif cs and not ss:
+            out += ts(t"    def {mname}(self, stream: GrpcClientStream[{req}]) raises -> {resp}: ...\n")
+        else:
+            out += ts(t"    def {mname}(self, stream: GrpcBidiStream[{req}, {resp}]) raises: ...\n")
+
+    out += "\n\n"
+    out += ts(t"struct {name}Stub:\n")
+    out += "    var _channel: GrpcChannel\n"
+    out += "\n    def __init__(out self, channel: GrpcChannel):\n"
+    out += "        self._channel = channel\n"
+
+    for m in svc.method:
+        var mname = m.name.value() if m.name else "Unknown"
+        var req   = last_component(m.input_type.value() if m.input_type else "")
+        var resp  = last_component(m.output_type.value() if m.output_type else "")
+        var path  = pkg_prefix + name + "/" + mname
+        var cs    = m.client_streaming and m.client_streaming.value()
+        var ss    = m.server_streaming and m.server_streaming.value()
+        if not cs and not ss:
+            out += ts(t"\n    def {mname}(mut self, request: {req}) raises -> {resp}:\n")
+            out += ts(t'        return self._channel.unary_unary[{req}, {resp}]("{path}", request)\n')
+        elif not cs and ss:
+            out += ts(t"\n    def {mname}(mut self, request: {req}) raises -> GrpcServerStream[{resp}]:\n")
+            out += ts(t'        return self._channel.unary_stream[{req}, {resp}]("{path}", request)\n')
+        elif cs and not ss:
+            out += ts(t"\n    def {mname}(mut self) raises -> GrpcClientStream[{req}, {resp}]:\n")
+            out += ts(t'        return self._channel.stream_unary[{req}, {resp}]("{path}")\n')
+        else:
+            out += ts(t"\n    def {mname}(mut self) raises -> GrpcBidiStream[{req}, {resp}]:\n")
+            out += ts(t'        return self._channel.bidi[{req}, {resp}]("{path}")\n')
+
+    return out
 
 
 def generate_file(proto_file: FileDescriptorProto, module_prefix: String = "") raises -> String:
@@ -485,12 +715,16 @@ def generate_file(proto_file: FileDescriptorProto, module_prefix: String = "") r
     var deps = List[String]()
     for dep in proto_file.dependency:
         deps.append(dep)
-    chunks.append(generate_prelude(deps, module_prefix))
+    var has_services = len(proto_file.service) > 0
+    chunks.append(generate_prelude(deps, module_prefix, has_services))
     for e in proto_file.enum_type:
         chunks.append(generate_enum(e, 0))
     for m in proto_file.message_type:
         for p in generate_message(m, renamings, scalar_types, read_fns, 0, ""):
             chunks.append(p)
+    var pkg = proto_file.package.value() if proto_file.package else ""
+    for svc in proto_file.service:
+        chunks.append(generate_service(svc, pkg))
 
     var out = String()
     var first = True

@@ -43,11 +43,11 @@ def emit_init_files(
     """Emit __init__.mojo for each intermediate package directory."""
     var b = proto_name.as_bytes()
     # strip .proto suffix
-    var name_end = len(b) - 6  # len(".proto") == 6
+    var name_end = len(b) - len(".proto")
     var parts = List[String]()
     var seg = List[UInt8]()
     for i in range(name_end):
-        if b[i] == 47:  # ord('/')
+        if b[i] == ord('/'):
             parts.append(String(unsafe_from_utf8=seg^))
             seg = List[UInt8]()
         else:

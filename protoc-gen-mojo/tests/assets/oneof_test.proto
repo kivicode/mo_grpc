@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+enum Color { RED = 0; GREEN = 1; BLUE = 2; }
+
+message Inner { optional int32 x = 1; }
+
+// A service to verify gRPC codegen (no runtime needed for this test)
+service Greeter {
+  rpc SayHello         (Inner) returns (Inner);
+  rpc ServerStream     (Inner) returns (stream Inner);
+  rpc ClientStream     (stream Inner) returns (Inner);
+  rpc Bidi             (stream Inner) returns (stream Inner);
+}
+
+message Wrapper {
+  oneof payload {
+    string  text    = 1;
+    int32   number  = 2;
+    Inner   nested  = 3;
+    Color   color   = 4;
+  }
+  optional string name = 10;
+}

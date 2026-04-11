@@ -8,7 +8,7 @@ from protoc_gen_mojo.gen.google.protobuf.descriptor import *
 
 
 @fieldwise_init
-struct Version(Copyable, ProtoSerializable):
+struct Version(ProtoSerializable, Copyable, ImplicitlyCopyable):
     var major: Optional[Int32]
     var minor: Optional[Int32]
     var patch: Optional[Int32]
@@ -25,7 +25,7 @@ struct Version(Copyable, ProtoSerializable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-
+            
             if field_number == 1:
                 instance.major = reader.read_int32()
             elif field_number == 2:
@@ -51,7 +51,7 @@ struct Version(Copyable, ProtoSerializable):
 
 
 @fieldwise_init
-struct CodeGeneratorRequest(Copyable, ProtoSerializable):
+struct CodeGeneratorRequest(ProtoSerializable, Copyable, ImplicitlyCopyable):
     var file_to_generate: List[String]
     var parameter: Optional[String]
     var proto_file: List[FileDescriptorProto]
@@ -70,7 +70,7 @@ struct CodeGeneratorRequest(Copyable, ProtoSerializable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-
+            
             if field_number == 1:
                 instance.file_to_generate.append(reader.read_string())
             elif field_number == 2:
@@ -109,7 +109,7 @@ struct CodeGeneratorRequest(Copyable, ProtoSerializable):
 
 
 @fieldwise_init
-struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
+struct CodeGeneratorResponseFile(ProtoSerializable, Copyable, ImplicitlyCopyable):
     var name: Optional[String]
     var insertion_point: Optional[String]
     var content: Optional[String]
@@ -126,7 +126,7 @@ struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-
+            
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -155,13 +155,13 @@ struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
 
 
 @fieldwise_init
-struct Feature(Equatable, ImplicitlyCopyable, ProtoSerializable):
+struct Feature(ProtoSerializable, Equatable, ImplicitlyCopyable):
     var _value: Int
-
+    
     comptime FEATURE_NONE = Feature(0)
-
+    
     comptime FEATURE_PROTO3_OPTIONAL = Feature(1)
-
+    
     comptime FEATURE_SUPPORTS_EDITIONS = Feature(2)
 
     @staticmethod
@@ -179,7 +179,7 @@ struct Feature(Equatable, ImplicitlyCopyable, ProtoSerializable):
 
 
 @fieldwise_init
-struct CodeGeneratorResponse(Copyable, ProtoSerializable):
+struct CodeGeneratorResponse(ProtoSerializable, Copyable, ImplicitlyCopyable):
     var error: Optional[String]
     var supported_features: Optional[UInt64]
     var minimum_edition: Optional[Int32]
@@ -198,7 +198,7 @@ struct CodeGeneratorResponse(Copyable, ProtoSerializable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-
+            
             if field_number == 1:
                 instance.error = reader.read_string()
             elif field_number == 2:
