@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+enum PhoneType {
+  UNKNOWN = 0;
+  MOBILE  = 1;
+  HOME    = 2;
+  WORK    = 3;
+}
+
+message Address {
+  optional string street = 1;
+  optional string city   = 2;
+  optional string zip    = 3;
+}
+
+message Person {
+  optional string  name       = 1;
+  optional int32   id         = 2;
+  repeated string  emails     = 3;
+  optional Address address    = 4;
+  optional PhoneType phone_type = 5;
+  map<string, string> attributes = 6;
+}
