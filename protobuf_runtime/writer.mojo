@@ -50,6 +50,18 @@ struct ProtoWriter:
         self.write_tag(field, WireType.VARINT)
         self.write_varint(UInt64(value))
 
+    def write_sint64(mut self, field: FieldNumber, value: Int64):
+        self.write_tag(field, WireType.VARINT)
+        self.write_varint(zigzag_encode(value))
+
+    def write_sfixed32(mut self, field: FieldNumber, value: Int32):
+        self.write_tag(field, WireType.FIXED_32)
+        self._write(to_le_bytes(UInt32(bitcast[DType.uint32](value))))
+
+    def write_sfixed64(mut self, field: FieldNumber, value: Int64):
+        self.write_tag(field, WireType.FIXED_64)
+        self._write(to_le_bytes(UInt64(bitcast[DType.uint64](value))))
+
     def write_sint32(mut self, field: FieldNumber, value: Int32):
         self.write_tag(field, WireType.VARINT)
         self.write_varint(zigzag_encode(Int64(value)))
@@ -95,9 +107,8 @@ struct ProtoWriter:
     def _write(mut self,  data: Bytes):
         self.buffer.append(data.copy())
 
-def zigzag_encode[T: DType](val: Scalar[T]) -> VarInt:
-    n = VarInt(val)
-    return UInt64((n << 1) ^ (n >> UInt64(bit_width_of[Scalar[T]]()) - 1))
+def zigzag_encode(val: Int64) -> UInt64:
+    return UInt64((val << 1) ^ (val >> 63))
 
 def to_le_bytes[T: DType](value: Scalar[T]) -> Bytes:
     comptime num_bytes = bit_width_of[Scalar[T]]() // 8
