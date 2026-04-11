@@ -4,16 +4,16 @@
 """
 
 from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable
-
 from protoc_gen_mojo.gen.google.protobuf.descriptor import *
 
+
 @fieldwise_init
-struct Version(ProtoSerializable, Copyable):
+struct Version(Copyable, ProtoSerializable):
     var major: Optional[Int32]
     var minor: Optional[Int32]
     var patch: Optional[Int32]
     var suffix: Optional[String]
-    
+
     def __init__(out self):
         self.major = None
         self.minor = None
@@ -25,7 +25,7 @@ struct Version(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.major = reader.read_int32()
             elif field_number == 2:
@@ -49,14 +49,15 @@ struct Version(ProtoSerializable, Copyable):
         if self.suffix:
             writer.write_string(4, self.suffix.value())
 
+
 @fieldwise_init
-struct CodeGeneratorRequest(ProtoSerializable, Copyable):
+struct CodeGeneratorRequest(Copyable, ProtoSerializable):
     var file_to_generate: List[String]
     var parameter: Optional[String]
     var proto_file: List[FileDescriptorProto]
     var source_file_descriptors: List[FileDescriptorProto]
     var compiler_version: Optional[Version]
-    
+
     def __init__(out self):
         self.file_to_generate = List[String]()
         self.parameter = None
@@ -69,7 +70,7 @@ struct CodeGeneratorRequest(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.file_to_generate.append(reader.read_string())
             elif field_number == 2:
@@ -106,13 +107,14 @@ struct CodeGeneratorRequest(ProtoSerializable, Copyable):
             self.compiler_version.value().serialize(sub)
             writer.write_message(3, sub)
 
+
 @fieldwise_init
-struct CodeGeneratorResponseFile(ProtoSerializable, Copyable):
+struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
     var name: Optional[String]
     var insertion_point: Optional[String]
     var content: Optional[String]
     var generated_code_info: Optional[GeneratedCodeInfo]
-    
+
     def __init__(out self):
         self.name = None
         self.insertion_point = None
@@ -124,7 +126,7 @@ struct CodeGeneratorResponseFile(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.name = reader.read_string()
             elif field_number == 2:
@@ -151,12 +153,15 @@ struct CodeGeneratorResponseFile(ProtoSerializable, Copyable):
             self.generated_code_info.value().serialize(sub)
             writer.write_message(16, sub)
 
+
 @fieldwise_init
-struct Feature(ProtoSerializable, Equatable, ImplicitlyCopyable):
+struct Feature(Equatable, ImplicitlyCopyable, ProtoSerializable):
     var _value: Int
-    
+
     comptime FEATURE_NONE = Feature(0)
+
     comptime FEATURE_PROTO3_OPTIONAL = Feature(1)
+
     comptime FEATURE_SUPPORTS_EDITIONS = Feature(2)
 
     @staticmethod
@@ -172,14 +177,15 @@ struct Feature(ProtoSerializable, Equatable, ImplicitlyCopyable):
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
 
+
 @fieldwise_init
-struct CodeGeneratorResponse(ProtoSerializable, Copyable):
+struct CodeGeneratorResponse(Copyable, ProtoSerializable):
     var error: Optional[String]
     var supported_features: Optional[UInt64]
     var minimum_edition: Optional[Int32]
     var maximum_edition: Optional[Int32]
     var file: List[CodeGeneratorResponseFile]
-    
+
     def __init__(out self):
         self.error = None
         self.supported_features = None
@@ -192,7 +198,7 @@ struct CodeGeneratorResponse(ProtoSerializable, Copyable):
         var instance = Self()
         while reader.has_more():
             var field_number, wire_type = reader.read_tag()
-            
+
             if field_number == 1:
                 instance.error = reader.read_string()
             elif field_number == 2:
