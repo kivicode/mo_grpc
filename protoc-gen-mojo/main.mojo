@@ -1,4 +1,4 @@
-from sys import stdin, stdout
+from std.sys import stdin, stdout
 from protobuf_runtime import ProtoReader, ProtoWriter
 from protobuf_runtime.common import Bytes
 from protoc_gen_mojo.gen.plugin import CodeGeneratorRequest, CodeGeneratorResponse, CodeGeneratorResponseFile, Feature
@@ -67,12 +67,14 @@ def emit_init_files(
                 break
         if not already:
             emitted.append(init_path)
-            files.append(CodeGeneratorResponseFile(
-                name=Optional[String](init_path),
-                insertion_point=None,
-                content=Optional[String](String()),
-                generated_code_info=None,
-            ))
+            files.append(
+                CodeGeneratorResponseFile(
+                    name=Optional[String](init_path),
+                    insertion_point=None,
+                    content=Optional[String](String()),
+                    generated_code_info=None,
+                )
+            )
 
 
 def parse_module_prefix(parameter: Optional[String]) -> String:
@@ -114,12 +116,14 @@ def main() raises:
             continue
         var fname = pf.name.value()
         emit_init_files(files, emitted_inits, fname)
-        files.append(CodeGeneratorResponseFile(
-            name=Optional[String](replace_proto_ext(fname)),
-            insertion_point=None,
-            content=Optional[String](generate_file(pf, module_prefix)),
-            generated_code_info=None,
-        ))
+        files.append(
+            CodeGeneratorResponseFile(
+                name=Optional[String](replace_proto_ext(fname)),
+                insertion_point=None,
+                content=Optional[String](generate_file(pf, module_prefix)),
+                generated_code_info=None,
+            )
+        )
 
     var response = CodeGeneratorResponse(
         error=None,
