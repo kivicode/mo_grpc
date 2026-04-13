@@ -5,7 +5,7 @@ Pure frame/byte tests - no network.
 
 from testing import assert_equal, assert_true
 from protobuf_runtime.common import Bytes
-from grpc_runtime.frame import encode_grpc_frame, decode_grpc_frame, FrameSplit
+from mgrpc.frame import encode_grpc_frame, decode_grpc_frame, FrameSplit
 
 
 def make_bytes(values: List[Int]) -> Bytes:

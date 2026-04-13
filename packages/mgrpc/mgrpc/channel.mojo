@@ -4,9 +4,9 @@ Client-side transport abstraction.
 
 from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable
 from protobuf_runtime.common import Bytes
-from grpc_runtime.frame import encode_grpc_frame, decode_grpc_frame
-from grpc_runtime.streams import GrpcServerStream, GrpcClientStream, GrpcBidiStream
-from grpc_runtime.transport import http_post
+from mgrpc.frame import encode_grpc_frame, decode_grpc_frame
+from mgrpc.streams import GrpcServerStream, GrpcClientStream, GrpcBidiStream
+from mgrpc.transport import http_post
 
 
 struct GrpcChannel:

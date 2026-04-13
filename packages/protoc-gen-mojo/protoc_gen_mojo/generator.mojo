@@ -215,7 +215,7 @@ def generate_prelude(deps: List[String], module_prefix: String = "", has_service
         var mod = proto_path_to_module(dep, module_prefix)
         out += ts(t"from {mod} import *\n")
     if has_services:
-        out += "from grpc_runtime import GrpcChannel, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
+        out += "from mgrpc import GrpcChannel, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
     return out
 
 

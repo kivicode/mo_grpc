@@ -1,14 +1,26 @@
 [workspace]
 authors = ["KiviCode <kivicode@yandex.com>"]
-channels = ["https://conda.modular.com/max", "conda-forge", "https://repo.prefix.dev/mojo-community"]
-name = "protoc-gen-mojo"
+channels = [
+    "https://conda.modular.com/max",
+    "conda-forge",
+    "https://repo.prefix.dev/mojo-community",
+]
+name = "ouroboros"
+description = "Monorepo: protobuf-runtime + mgrpc + protoc-gen-mojo for the Mojo ecosystem."
 platforms = ["osx-arm64"]
 version = "0.1.0"
 preview = ["pixi-build"]
 
-[tasks]
-
+# Dev dependencies used when running tests / the generator from a source checkout.
 [dependencies]
 modular = ">=26.2.0,<27"
-curl_wrapper = { git = "https://github.com/thatstoasty/mojo-curl.git", branch = "main", subdirectory = "shim" }
+curl_wrapper = { git = "https://github.com/thatstoasty/mojo-curl.git", subdirectory = "shim", branch = "main" }
 mojo-curl = ">=0.2.0,<0.3"
+
+[tasks]
+test = "bash packages/protoc-gen-mojo/tests/run_tests.sh"
+
+build-protobuf-runtime = { cmd = "pixi build -o .", cwd = "packages/protobuf-runtime" }
+build-mgrpc            = { cmd = "pixi build -o .", cwd = "packages/mgrpc" }
+build-protoc-gen-mojo  = { cmd = "pixi build -o .", cwd = "packages/protoc-gen-mojo" }
+build-all              = { depends-on = ["build-protobuf-runtime", "build-mgrpc", "build-protoc-gen-mojo"] }
