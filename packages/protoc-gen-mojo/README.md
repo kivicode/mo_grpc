@@ -12,7 +12,7 @@ A [protoc](https://protobuf.dev/reference/protobuf/proto3-spec/) plugin that gen
 - `oneof` — generates a discriminant-tagged union struct with type-safe factories and accessors
 - gRPC services — emits a server trait and a client stub for each `service` in the file, supporting all four streaming combinations
 
-Output is plain Mojo structs implementing [`protobuf-runtime`](https://github.com/KiviCode/ouroboros/tree/main/packages/protobuf-runtime)'s `ProtoSerializable` trait. gRPC stubs link against [`mgrpc`](https://github.com/KiviCode/ouroboros/tree/main/packages/mgrpc).
+Output is plain Mojo structs implementing [`mo_protobuf`](https://github.com/KiviCode/ouroboros/tree/main/packages/mo_protobuf)'s `ProtoSerializable` trait. gRPC stubs link against [`mo_grpc`](https://github.com/KiviCode/ouroboros/tree/main/packages/mo_grpc).
 
 ## Install
 

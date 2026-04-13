@@ -2,8 +2,8 @@
 gRPC stream handles for the four streaming combinations
 """
 
-from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable
-from protobuf_runtime.common import Bytes
+from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable
+from mo_protobuf.common import Bytes
 
 
 struct GrpcServerStream[Resp: ProtoSerializable & Copyable]:

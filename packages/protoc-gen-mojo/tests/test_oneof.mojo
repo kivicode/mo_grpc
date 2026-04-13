@@ -5,8 +5,8 @@ for all four variant kinds: string, scalar, nested message, and enum.
 """
 
 from testing import assert_equal, assert_true, assert_false
-from protobuf_runtime import ProtoReader, ProtoWriter
-from protobuf_runtime.common import Bytes
+from mo_protobuf import ProtoReader, ProtoWriter
+from mo_protobuf.common import Bytes
 from oneof_test import Wrapper, WrapperPayload, Inner, Color
 
 

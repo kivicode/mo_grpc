@@ -6,7 +6,7 @@ REPO="$(cd "$PACKAGES/.." && pwd)"
 PIXI="$(command -v pixi || echo "$HOME/.pixi/bin/pixi")"
 cd "$REPO"
 exec "$PIXI" run mojo run \
-  -I "$PACKAGES/protobuf-runtime" \
-  -I "$PACKAGES/mgrpc" \
+  -I "$PACKAGES/mo_protobuf" \
+  -I "$PACKAGES/mo_grpc" \
   -I "$PLUGIN_DIR" \
   "$PLUGIN_DIR/main.mojo" "$@"

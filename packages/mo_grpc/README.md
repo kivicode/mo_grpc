@@ -1,4 +1,4 @@
-# mgrpc
+# mo_grpc
 
 gRPC client + runtime for Mojo.
 
@@ -9,18 +9,18 @@ gRPC client + runtime for Mojo.
 - `GrpcServerStream`, `GrpcClientStream`, `GrpcBidiStream` — stream handle types (unary is implemented; streaming variants require the libcurl multi handle and are TODO)
 - `http_post(url, body) -> Bytes` — low-level HTTPS POST helper
 
-Depends on [`protobuf-runtime`](https://github.com/KiviCode/ouroboros/tree/main/packages/protobuf-runtime), `mojo-curl`, and the `curl_wrapper` C shim.
+Depends on [`mo_protobuf`](https://github.com/KiviCode/ouroboros/tree/main/packages/mo_protobuf), `mojo-curl`, and the `curl_wrapper` C shim.
 
 ## Install
 
 ```bash
-pixi add mgrpc
+pixi add mo_grpc
 ```
 
 ## Example
 
 ```mojo
-from mgrpc import GrpcChannel
+from mo_grpc import GrpcChannel
 from my.generated.helloworld import HelloRequest, HelloReply, GreeterStub
 
 var channel = GrpcChannel("https://api.example.com:443")

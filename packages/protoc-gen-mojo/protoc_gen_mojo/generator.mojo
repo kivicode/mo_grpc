@@ -209,13 +209,13 @@ def generate_prelude(deps: List[String], module_prefix: String = "", has_service
         "   AUTO-GENERATED CODE\n"
         "   !!! DO NOT EDIT !!!\n"
         '"""\n\n'
-        "from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable\n"
+        "from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable\n"
     )
     for dep in deps:
         var mod = proto_path_to_module(dep, module_prefix)
         out += ts(t"from {mod} import *\n")
     if has_services:
-        out += "from mgrpc import GrpcChannel, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
+        out += "from mo_grpc import GrpcChannel, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
     return out
 
 

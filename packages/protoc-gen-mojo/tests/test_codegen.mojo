@@ -1,6 +1,6 @@
 from testing import assert_equal, assert_true, assert_false
-from protobuf_runtime import ProtoReader, ProtoWriter
-from protobuf_runtime.common import Bytes
+from mo_protobuf import ProtoReader, ProtoWriter
+from mo_protobuf.common import Bytes
 from person import Person, Address, PhoneType
 
 

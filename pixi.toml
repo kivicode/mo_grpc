@@ -5,8 +5,8 @@ channels = [
     "conda-forge",
     "https://repo.prefix.dev/mojo-community",
 ]
-name = "ouroboros"
-description = "Monorepo: protobuf-runtime + mgrpc + protoc-gen-mojo for the Mojo ecosystem."
+name = "mo_grpc"
+description = "Monorepo: mo_protobuf + mo_grpc + protoc-gen-mojo for the Mojo ecosystem."
 platforms = ["osx-arm64"]
 version = "0.1.0"
 preview = ["pixi-build"]
@@ -20,7 +20,11 @@ mojo-curl = ">=0.2.0,<0.3"
 [tasks]
 test = "bash packages/protoc-gen-mojo/tests/run_tests.sh"
 
-build-protobuf-runtime = { cmd = "pixi build -o .", cwd = "packages/protobuf-runtime" }
-build-mgrpc            = { cmd = "pixi build -o .", cwd = "packages/mgrpc" }
-build-protoc-gen-mojo  = { cmd = "pixi build -o .", cwd = "packages/protoc-gen-mojo" }
-build-all              = { depends-on = ["build-protobuf-runtime", "build-mgrpc", "build-protoc-gen-mojo"] }
+build-mo_protobuf = { cmd = "pixi build -o .", cwd = "packages/mo_protobuf" }
+build-mo_grpc = { cmd = "pixi build -o .", cwd = "packages/mo_grpc" }
+build-protoc-gen-mojo = { cmd = "pixi build -o .", cwd = "packages/protoc-gen-mojo" }
+build-all = { depends-on = [
+    "build-mo_protobuf",
+    "build-mo_grpc",
+    "build-protoc-gen-mojo",
+] }

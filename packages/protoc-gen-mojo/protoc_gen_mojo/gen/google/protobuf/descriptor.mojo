@@ -3,7 +3,7 @@
    !!! DO NOT EDIT !!!
 """
 
-from protobuf_runtime import ProtoReader, ProtoWriter, ProtoSerializable
+from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable
 
 
 @fieldwise_init

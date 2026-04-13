@@ -1,4 +1,4 @@
-from protobuf_runtime.common import Bytes, WireType, FieldNumber, Tag, VarInt
+from mo_protobuf.common import Bytes, WireType, FieldNumber, Tag, VarInt
 from std.utils import Variant
 from std.algorithm.reduction import sum
 from std.sys import bit_width_of

@@ -1,4 +1,4 @@
-from protobuf_runtime.common import Bytes, WireType, FieldNumber, VarInt
+from mo_protobuf.common import Bytes, WireType, FieldNumber, VarInt
 from std.memory import bitcast
 
 

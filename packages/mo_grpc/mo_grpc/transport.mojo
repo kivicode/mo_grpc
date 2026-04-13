@@ -10,7 +10,7 @@ from mojo_curl.c.types import (
     MutExternalPointer,
     Result,
 )
-from protobuf_runtime.common import Bytes
+from mo_protobuf.common import Bytes
 
 
 # libcurl calls this for each chunk of response data. `userdata` is a pointer to

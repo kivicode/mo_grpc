@@ -1,6 +1,6 @@
 from testing import assert_equal, assert_true, assert_false
-from protobuf_runtime import ProtoReader, ProtoWriter
-from protobuf_runtime.common import Bytes, WireType
+from mo_protobuf import ProtoReader, ProtoWriter
+from mo_protobuf.common import Bytes, WireType
 
 
 def roundtrip(mut w: ProtoWriter) -> ProtoReader:

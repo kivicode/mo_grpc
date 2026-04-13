@@ -7,7 +7,7 @@ Each gRPC DATA frame is:
     bytes 5..:  serialized protobuf message (body)
 """
 
-from protobuf_runtime.common import Bytes
+from mo_protobuf.common import Bytes
 
 
 def encode_grpc_frame(body: Bytes) -> Bytes:

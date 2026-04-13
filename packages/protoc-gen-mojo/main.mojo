@@ -1,6 +1,6 @@
 from std.sys import stdin, stdout
-from protobuf_runtime import ProtoReader, ProtoWriter
-from protobuf_runtime.common import Bytes
+from mo_protobuf import ProtoReader, ProtoWriter
+from mo_protobuf.common import Bytes
 from protoc_gen_mojo.gen.plugin import CodeGeneratorRequest, CodeGeneratorResponse, CodeGeneratorResponseFile, Feature
 from protoc_gen_mojo.generator import generate_file
 

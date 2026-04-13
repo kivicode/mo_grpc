@@ -7,8 +7,8 @@ Hits httpbin.org which echoes POST bodies - verifies:
 """
 
 from testing import assert_true
-from protobuf_runtime.common import Bytes
-from mgrpc import http_post
+from mo_protobuf.common import Bytes
+from mo_grpc import http_post
 
 
 def test_httpbin_post_binary() raises:

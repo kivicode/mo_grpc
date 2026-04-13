@@ -10,11 +10,11 @@ PIXI="$(command -v pixi || echo "$HOME/.pixi/bin/pixi")"
 
 NOISE='warning:|^ *var |^ *\^ |^from |^ *std\.|^Included|^/Users|^ *\^$'
 
-# Every mojo invocation needs these -I paths so `from protobuf_runtime ...`
-# and `from mgrpc ...` resolve.
+# Every mojo invocation needs these -I paths so `from mo_protobuf ...`
+# and `from mo_grpc ...` resolve.
 MOJO_IPATH=(
-  -I "$PACKAGES/protobuf-runtime"
-  -I "$PACKAGES/mgrpc"
+  -I "$PACKAGES/mo_protobuf"
+  -I "$PACKAGES/mo_grpc"
   -I "$PLUGIN_DIR"
 )
 

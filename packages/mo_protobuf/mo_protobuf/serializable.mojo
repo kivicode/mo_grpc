@@ -1,5 +1,5 @@
-from protobuf_runtime.writer import ProtoWriter
-from protobuf_runtime.reader import ProtoReader
+from mo_protobuf.writer import ProtoWriter
+from mo_protobuf.reader import ProtoReader
 
 
 trait ProtoSerializable:

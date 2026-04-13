@@ -4,9 +4,9 @@ Monorepo for three tightly-coupled Mojo packages:
 
 | Package             | Path                                  | What it is |
 |---------------------|---------------------------------------|------------|
-| `protobuf-runtime`  | `packages/protobuf-runtime/`          | Pure-Mojo protobuf wire-format runtime: `ProtoReader`, `ProtoWriter`, `ProtoSerializable` trait. Zero external deps. |
-| `mgrpc`             | `packages/mgrpc/`                     | gRPC client + runtime. 5-byte frame codec, `GrpcChannel` with HTTP/2 + TLS over libcurl, server/client/bidi stream handles. Depends on `protobuf-runtime`. |
-| `protoc-gen-mojo`   | `packages/protoc-gen-mojo/`           | `protoc` plugin: generates Mojo structs, oneof-union structs, and gRPC server traits + client stubs from `.proto` files. Depends on `protobuf-runtime` at runtime (to parse `CodeGeneratorRequest`). |
+| `mo_protobuf`  | `packages/mo_protobuf/`          | Pure-Mojo protobuf wire-format runtime: `ProtoReader`, `ProtoWriter`, `ProtoSerializable` trait. Zero external deps. |
+| `mo_grpc`             | `packages/mo_grpc/`                     | gRPC client + runtime. 5-byte frame codec, `GrpcChannel` with HTTP/2 + TLS over libcurl, server/client/bidi stream handles. Depends on `mo_protobuf`. |
+| `protoc-gen-mojo`   | `packages/protoc-gen-mojo/`           | `protoc` plugin: generates Mojo structs, oneof-union structs, and gRPC server traits + client stubs from `.proto` files. Depends on `mo_protobuf` at runtime (to parse `CodeGeneratorRequest`). |
 
 Named after the [ouroboros](https://en.wikipedia.org/wiki/Ouroboros) because the generator bootstraps itself: it reads `google/protobuf/descriptor.proto` using the Mojo runtime it generates, then regenerates its own descriptor bindings.
 
@@ -38,8 +38,8 @@ The pattern follows [`mojo-curl`](https://github.com/thatstoasty/mojo-curl):
 pixi run build-all
 
 # or build one at a time
-cd packages/protobuf-runtime && pixi run build
-cd packages/mgrpc            && pixi run build
+cd packages/mo_protobuf && pixi run build
+cd packages/mo_grpc            && pixi run build
 cd packages/protoc-gen-mojo  && pixi run build
 ```
 
@@ -50,8 +50,8 @@ This produces a `.conda` file in each package directory. To publish to the [`moj
 pixi auth login prefix.dev --token <YOUR_TOKEN>
 
 # publish each package
-cd packages/protobuf-runtime && pixi run publish
-cd packages/mgrpc            && pixi run publish
+cd packages/mo_protobuf && pixi run publish
+cd packages/mo_grpc            && pixi run publish
 cd packages/protoc-gen-mojo  && pixi run publish
 ```
 
@@ -60,8 +60,8 @@ Once published, consumers in any pixi project add them with:
 ```bash
 # ensure the channel is in pixi.toml:
 #   channels = [..., "https://repo.prefix.dev/mojo-community"]
-pixi add protobuf-runtime
-pixi add mgrpc
+pixi add mo_protobuf
+pixi add mo_grpc
 pixi add protoc-gen-mojo
 ```
 
