@@ -26,7 +26,7 @@ struct ProtoWriter:
         return output^
 
     def write_varint(mut self, value: UInt64):
-        """Variable-length encoding — NOT the same as to_le_bytes."""
+        """Variable-length encoding - NOT the same as to_le_bytes."""
         var v = value
         var out = Bytes()
         while v > 0x7F:

@@ -6,20 +6,15 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="$(cd "$PLUGIN_DIR/.." && pwd)"
-MOJO="$REPO/.venv/bin/mojo"
+PIXI="$(command -v pixi || echo "$HOME/.pixi/bin/pixi")"
 
 NOISE='warning:|^ *var |^ *\^ |^from |^ *std\.|^Included|^/Users|^ *\^$'
 
-# ── one-shot plugin wrapper ───────────────────────────────────────────────────
+run_mojo() {
+  (cd "$REPO" && "$PIXI" run mojo run "$@")
+}
+
 PLUGIN_WRAPPER="$SCRIPT_DIR/run_plugin.sh"
-cat > "$PLUGIN_WRAPPER" << EOF
-#!/bin/bash
-exec "$MOJO" run \\
-  -I "$REPO" \\
-  -I "$PLUGIN_DIR" \\
-  "$PLUGIN_DIR/main.mojo" "\$@"
-EOF
-chmod +x "$PLUGIN_WRAPPER"
 
 cd "$PLUGIN_DIR"
 OVERALL=0
@@ -41,23 +36,28 @@ done
 # ── runtime tests ─────────────────────────────────────────────────────────────
 echo ""
 echo "=== runtime tests ==="
-"$MOJO" run -I "$REPO" tests/test_runtime.mojo 2>&1 | grep -Ev "$NOISE"
+run_mojo -I "$REPO" "$PLUGIN_DIR/tests/test_runtime.mojo" 2>&1 | grep -Ev "$NOISE"
 [ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
 
 # ── codegen roundtrip tests ───────────────────────────────────────────────────
 echo ""
 echo "=== codegen roundtrip tests ==="
-"$MOJO" run -I "$REPO" -I tests/gen tests/test_codegen.mojo 2>&1 | grep -Ev "$NOISE"
+run_mojo -I "$REPO" -I "$PLUGIN_DIR/tests/gen" "$PLUGIN_DIR/tests/test_codegen.mojo" 2>&1 | grep -Ev "$NOISE"
 [ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
 
 echo ""
 echo "=== oneof tests ==="
-"$MOJO" run -I "$REPO" -I tests/gen tests/test_oneof.mojo 2>&1 | grep -Ev "$NOISE"
+run_mojo -I "$REPO" -I "$PLUGIN_DIR/tests/gen" "$PLUGIN_DIR/tests/test_oneof.mojo" 2>&1 | grep -Ev "$NOISE"
 [ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
 
 echo ""
 echo "=== grpc frame tests ==="
-"$MOJO" run -I "$REPO" tests/test_grpc_frame.mojo 2>&1 | grep -Ev "$NOISE"
+run_mojo -I "$REPO" "$PLUGIN_DIR/tests/test_grpc_frame.mojo" 2>&1 | grep -Ev "$NOISE"
+[ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
+
+echo ""
+echo "=== grpc transport tests (network) ==="
+run_mojo -I "$REPO" "$PLUGIN_DIR/tests/test_grpc_transport.mojo" 2>&1 | grep -Ev "$NOISE"
 [ "${PIPESTATUS[0]}" -ne 0 ] && OVERALL=1
 
 exit $OVERALL

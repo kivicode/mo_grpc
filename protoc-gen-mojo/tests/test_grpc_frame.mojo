@@ -1,6 +1,6 @@
 """
 Tests for the gRPC frame codec (5-byte header + length-prefixed body).
-Pure frame/byte tests — no network.
+Pure frame/byte tests - no network.
 """
 
 from testing import assert_equal, assert_true
@@ -17,28 +17,31 @@ def make_bytes(values: List[Int]) -> Bytes:
 
 # ── encode ────────────────────────────────────────────────────────────────────
 
+
 def test_encode_empty() raises:
     var frame = encode_grpc_frame(Bytes())
     assert_equal(len(frame), 5)
-    assert_equal(frame[0], UInt8(0))   # compression = none
+    assert_equal(frame[0], UInt8(0))  # compression = none
     assert_equal(frame[1], UInt8(0))
     assert_equal(frame[2], UInt8(0))
     assert_equal(frame[3], UInt8(0))
-    assert_equal(frame[4], UInt8(0))   # length = 0
+    assert_equal(frame[4], UInt8(0))  # length = 0
+
 
 def test_encode_small() raises:
     var body = make_bytes([0xDE, 0xAD, 0xBE, 0xEF])
     var frame = encode_grpc_frame(body)
-    assert_equal(len(frame), 9)        # 5 header + 4 body
+    assert_equal(len(frame), 9)  # 5 header + 4 body
     assert_equal(frame[0], UInt8(0))
     assert_equal(frame[1], UInt8(0))
     assert_equal(frame[2], UInt8(0))
     assert_equal(frame[3], UInt8(0))
-    assert_equal(frame[4], UInt8(4))   # length = 4
+    assert_equal(frame[4], UInt8(4))  # length = 4
     assert_equal(frame[5], UInt8(0xDE))
     assert_equal(frame[6], UInt8(0xAD))
     assert_equal(frame[7], UInt8(0xBE))
     assert_equal(frame[8], UInt8(0xEF))
+
 
 def test_encode_large_length_be() raises:
     """Verify big-endian length encoding for lengths > 255."""
@@ -56,6 +59,7 @@ def test_encode_large_length_be() raises:
 
 # ── decode ────────────────────────────────────────────────────────────────────
 
+
 def test_decode_roundtrip() raises:
     var original = make_bytes([0x11, 0x22, 0x33, 0x44, 0x55])
     var frame = encode_grpc_frame(original)
@@ -65,6 +69,7 @@ def test_decode_roundtrip() raises:
     assert_equal(split.body[4], UInt8(0x55))
     assert_equal(len(split.remainder), 0)
 
+
 def test_decode_two_frames() raises:
     """Decode one frame from a buffer that contains two back-to-back frames."""
     var a = make_bytes([0xAA, 0xBB])
@@ -72,19 +77,22 @@ def test_decode_two_frames() raises:
     var buf = Bytes()
     var fa = encode_grpc_frame(a)
     var fb = encode_grpc_frame(b)
-    for i in range(len(fa)): buf.append(fa[i])
-    for i in range(len(fb)): buf.append(fb[i])
+    for i in range(len(fa)):
+        buf.append(fa[i])
+    for i in range(len(fb)):
+        buf.append(fb[i])
 
     var first = decode_grpc_frame(buf)
     assert_equal(len(first.body), 2)
     assert_equal(first.body[0], UInt8(0xAA))
     assert_equal(first.body[1], UInt8(0xBB))
-    assert_equal(len(first.remainder), 6)   # second frame: 5 header + 1 body
+    assert_equal(len(first.remainder), 6)  # second frame: 5 header + 1 body
 
     var second = decode_grpc_frame(first.remainder)
     assert_equal(len(second.body), 1)
     assert_equal(second.body[0], UInt8(0xCC))
     assert_equal(len(second.remainder), 0)
+
 
 def test_decode_too_short() raises:
     var truncated = make_bytes([0x00, 0x00, 0x00])  # only 3 bytes, header needs 5
@@ -95,8 +103,9 @@ def test_decode_too_short() raises:
         caught = True
     assert_true(caught)
 
+
 def test_decode_truncated_body() raises:
-    var frame = make_bytes([0, 0, 0, 0, 5, 0x41, 0x42])   # claims 5 body bytes, has 2
+    var frame = make_bytes([0, 0, 0, 0, 5, 0x41, 0x42])  # claims 5 body bytes, has 2
     var caught = False
     try:
         _ = decode_grpc_frame(frame)
@@ -107,14 +116,16 @@ def test_decode_truncated_body() raises:
 
 # ── runner ─────────────────────────────────────────────────────────────────────
 
+
 def run_test(name: String, test: def() raises -> None) -> Bool:
     try:
         test()
         print("  PASS  " + name)
         return True
     except e:
-        print("  FAIL  " + name + " — " + String(e))
+        print("  FAIL  " + name + " - " + String(e))
         return False
+
 
 def main() raises:
     print("=== grpc frame codec tests ===\n")
@@ -128,13 +139,13 @@ def main() raises:
         else:
             failed += 1
 
-    check("encode empty",           test_encode_empty)
-    check("encode small",           test_encode_small)
-    check("encode large (BE)",      test_encode_large_length_be)
-    check("decode roundtrip",       test_decode_roundtrip)
-    check("decode two frames",      test_decode_two_frames)
-    check("decode too short",       test_decode_too_short)
-    check("decode truncated body",  test_decode_truncated_body)
+    check("encode empty", test_encode_empty)
+    check("encode small", test_encode_small)
+    check("encode large (BE)", test_encode_large_length_be)
+    check("decode roundtrip", test_decode_roundtrip)
+    check("decode two frames", test_decode_two_frames)
+    check("decode too short", test_decode_too_short)
+    check("decode truncated body", test_decode_truncated_body)
 
     print("\n" + String(passed) + " passed, " + String(failed) + " failed")
     if failed > 0:

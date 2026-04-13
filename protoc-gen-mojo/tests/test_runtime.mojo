@@ -400,7 +400,7 @@ def run_test(name: String, test: def() raises -> None) -> Bool:
         print("  PASS  " + name)
         return True
     except e:
-        print("  FAIL  " + name + " — " + String(e))
+        print("  FAIL  " + name + " - " + String(e))
         return False
 
 

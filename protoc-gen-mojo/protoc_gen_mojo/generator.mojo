@@ -31,12 +31,12 @@ struct MapEntry(Copyable, ImplicitlyCopyable):
 
 @fieldwise_init
 struct OneofField(Copyable, ImplicitlyCopyable):
-    var field_name:   String   # proto field name
+    var field_name: String  # proto field name
     var field_number: Int32
-    var mojo_type:    String   # base mojo type without Optional/List wrapping
-    var read_fn:      String  
-    var is_message:   Bool
-    var is_enum:      Bool
+    var mojo_type: String  # base mojo type without Optional/List wrapping
+    var read_fn: String
+    var is_message: Bool
+    var is_enum: Bool
 
 
 comptime Renamings = Dict[String, String]
@@ -130,7 +130,7 @@ def capitalize_first(s: String) -> String:
         return s
     var out = List[UInt8]()
     var c = b[0]
-    out.append(c - 32 if c >= 97 and c <= 122 else c)   # a-z -> A-Z
+    out.append(c - 32 if c >= 97 and c <= 122 else c)  # a-z -> A-Z
     for i in range(1, len(b)):
         out.append(b[i])
     return String(unsafe_from_utf8=out^)
@@ -221,6 +221,7 @@ def generate_prelude(deps: List[String], module_prefix: String = "", has_service
 
 # ── oneof helpers ──────────────────────────────────────────────────────────────
 
+
 def get_oneof_fields(
     desc: DescriptorProto,
     oneof_idx: Int,
@@ -237,14 +238,16 @@ def get_oneof_fields(
             continue
         if Int(f.oneof_index.value()) != oneof_idx:
             continue
-        result.append(OneofField(
-            f.name.value() if f.name else "unknown",
-            f.number.value() if f.number else Int32(0),
-            field_base_type(f, renamings, scalar_types),
-            read_fns.get(f.type.value()._value if f.type else 0, "Unknown"),
-            f.type and f.type.value() == Type.TYPE_MESSAGE,
-            f.type and f.type.value() == Type.TYPE_ENUM,
-        ))
+        result.append(
+            OneofField(
+                f.name.value() if f.name else "unknown",
+                f.number.value() if f.number else Int32(0),
+                field_base_type(f, renamings, scalar_types),
+                read_fns.get(f.type.value()._value if f.type else 0, "Unknown"),
+                f.type and f.type.value() == Type.TYPE_MESSAGE,
+                f.type and f.type.value() == Type.TYPE_ENUM,
+            )
+        )
     return result^
 
 
@@ -398,7 +401,7 @@ def generate_message(
         var seen_oneof_indices = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
-            var fnum  = Int(f.number.value()) if f.number else 0
+            var fnum = Int(f.number.value()) if f.number else 0
             var me = get_map_entry(map_entries, f, full)
             if fnum in oneof_by_fnum:
                 var oi = oneof_by_fnum[fnum]
@@ -424,7 +427,7 @@ def generate_message(
         var seen_oneof_init = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
-            var fnum  = Int(f.number.value()) if f.number else 0
+            var fnum = Int(f.number.value()) if f.number else 0
             var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
             var is_opt = f.label and f.label.value() == Label.LABEL_OPTIONAL
             var me = get_map_entry(map_entries, f, full)
@@ -470,15 +473,15 @@ def generate_message(
     var first = True
     for f in desc.field:
         var fname = f.name.value() if f.name else "unknown"
-        var num   = String(Int(f.number.value())) if f.number else "0"
-        var fnum  = Int(f.number.value()) if f.number else 0
-        var base  = field_base_type(f, renamings, scalar_types)
+        var num = String(Int(f.number.value())) if f.number else "0"
+        var fnum = Int(f.number.value()) if f.number else 0
+        var base = field_base_type(f, renamings, scalar_types)
         var branch = "if" if first else "elif"
         out += ts(t"            {branch} field_number == {num}:\n")
-        first = False  
+        first = False
 
         if fnum in oneof_by_fnum:
-            var oi    = oneof_by_fnum[fnum]
+            var oi = oneof_by_fnum[fnum]
             var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
             var utype = full + capitalize_first(oname)
             if f.type and f.type.value() == Type.TYPE_MESSAGE:
@@ -570,8 +573,8 @@ def generate_message(
         var seen_oneof_ser = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
-            var num   = String(Int(f.number.value())) if f.number else "0"
-            var fnum  = Int(f.number.value()) if f.number else 0
+            var num = String(Int(f.number.value())) if f.number else "0"
+            var fnum = Int(f.number.value()) if f.number else 0
             var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
             var is_opt = f.label and f.label.value() == Label.LABEL_OPTIONAL
             var me_ser = get_map_entry(map_entries, f, full)
@@ -590,7 +593,7 @@ def generate_message(
                     out += ts(t"            var pu = self.{oname}.value().copy()\n")
                     var gfirst = True
                     for gf in group:
-                        var gnum  = String(Int(gf.field_number))
+                        var gnum = String(Int(gf.field_number))
                         var gbranch = "if" if gfirst else "elif"
                         out += ts(t"            {gbranch} pu.is_{gf.field_name}():\n")
                         gfirst = False
@@ -599,10 +602,12 @@ def generate_message(
                             out += ts(t"                pu.get_{gf.field_name}().serialize(sub)\n")
                             out += ts(t"                writer.write_message({gnum}, sub)\n")
                         elif gf.is_enum:
-                            out += ts(t"                writer.write_int32({gnum}, Int32(pu.get_{gf.field_name}()._value))\n")
+                            out += ts(
+                                t"                writer.write_int32({gnum}, Int32(pu.get_{gf.field_name}()._value))\n"
+                            )
                         else:
                             out += ts(t"                writer.write_{gf.read_fn}({gnum}, pu.get_{gf.field_name}())\n")
-                continue   # skip per-field serialize for oneof members
+                continue  # skip per-field serialize for oneof members
 
             if me_ser:
                 var e = me_ser.value()
@@ -662,16 +667,16 @@ def generate_message(
 
 def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
     """Generate a server trait and client stub for one service."""
-    var name       = svc.name.value() if svc.name else "Unknown"
+    var name = svc.name.value() if svc.name else "Unknown"
     var pkg_prefix = "/" + package + "." if len(package) > 0 else "/"
 
     var out = ts(t"trait {name}Servicer:\n")
     for m in svc.method:
         var mname = m.name.value() if m.name else "Unknown"
-        var req   = last_component(m.input_type.value() if m.input_type else "")
-        var resp  = last_component(m.output_type.value() if m.output_type else "")
-        var cs    = m.client_streaming and m.client_streaming.value()
-        var ss    = m.server_streaming and m.server_streaming.value()
+        var req = last_component(m.input_type.value() if m.input_type else "")
+        var resp = last_component(m.output_type.value() if m.output_type else "")
+        var cs = m.client_streaming and m.client_streaming.value()
+        var ss = m.server_streaming and m.server_streaming.value()
         if not cs and not ss:
             out += ts(t"    def {mname}(self, request: {req}) raises -> {resp}: ...\n")
         elif not cs and ss:
@@ -689,11 +694,11 @@ def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
 
     for m in svc.method:
         var mname = m.name.value() if m.name else "Unknown"
-        var req   = last_component(m.input_type.value() if m.input_type else "")
-        var resp  = last_component(m.output_type.value() if m.output_type else "")
-        var path  = pkg_prefix + name + "/" + mname
-        var cs    = m.client_streaming and m.client_streaming.value()
-        var ss    = m.server_streaming and m.server_streaming.value()
+        var req = last_component(m.input_type.value() if m.input_type else "")
+        var resp = last_component(m.output_type.value() if m.output_type else "")
+        var path = pkg_prefix + name + "/" + mname
+        var cs = m.client_streaming and m.client_streaming.value()
+        var ss = m.server_streaming and m.server_streaming.value()
         if not cs and not ss:
             out += ts(t"\n    def {mname}(mut self, request: {req}) raises -> {resp}:\n")
             out += ts(t'        return self._channel.unary_unary[{req}, {resp}]("{path}", request)\n')
