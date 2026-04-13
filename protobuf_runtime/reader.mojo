@@ -90,7 +90,6 @@ struct ProtoReader:
         elif wire_type == WireType.FIXED_32:
             _ = self._read_n(4)
 
-
     def has_more(self) -> Bool:
         return self.caret < len(self.buffer)
 
@@ -113,7 +112,6 @@ struct ProtoReader:
         var tag = self.read_varint()
         return FieldNumber(tag >> 3), WireType(UInt8(tag & 0x07))
 
-
     def _read_byte(mut self) raises -> UInt8:
         if self.caret >= len(self.buffer):
             raise BufferExhausted("Attempted to read past buffer capacity of " + String(len(self.buffer)))
@@ -124,7 +122,12 @@ struct ProtoReader:
 
     def _read_n(mut self, num_bytes: Int) raises -> Bytes:
         if self.caret + num_bytes > len(self.buffer):
-            raise BufferExhausted("Attempted to read " + String(num_bytes) + " byte(s) past buffer capacity of " + String(len(self.buffer)))
+            raise BufferExhausted(
+                "Attempted to read "
+                + String(num_bytes)
+                + " byte(s) past buffer capacity of "
+                + String(len(self.buffer))
+            )
 
         var out = Bytes()
         out.reserve(num_bytes)
@@ -134,4 +137,3 @@ struct ProtoReader:
             self.caret += 1
 
         return out^
-

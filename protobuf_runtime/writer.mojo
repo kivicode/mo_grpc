@@ -4,8 +4,8 @@ from std.algorithm.reduction import sum
 from std.sys import bit_width_of
 from std.memory import bitcast
 
-struct ProtoWriter:
 
+struct ProtoWriter:
     var buffer: List[Bytes]
 
     def __init__(out self):
@@ -18,7 +18,7 @@ struct ProtoWriter:
         for part in self.buffer:
             total += len(part)
         output.reserve(total)
-        
+
         for part in self.buffer:
             output.extend(part.copy())
 
@@ -103,19 +103,21 @@ struct ProtoWriter:
         var data = sub.flush()
         self.write_varint(UInt64(len(data)))
         self._write(data^)
-        
-    def _write(mut self,  data: Bytes):
+
+    def _write(mut self, data: Bytes):
         self.buffer.append(data.copy())
+
 
 def zigzag_encode(val: Int64) -> UInt64:
     return UInt64((val << 1) ^ (val >> 63))
+
 
 def to_le_bytes[T: DType](value: Scalar[T]) -> Bytes:
     comptime num_bytes = bit_width_of[Scalar[T]]() // 8
     var raw = bitcast[DType.uint8, num_bytes](value)
     var out = Bytes()
-    
+
     for i in range(num_bytes):
         out.append(raw[i])
-        
+
     return out^

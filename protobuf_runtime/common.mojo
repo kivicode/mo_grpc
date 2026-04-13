@@ -3,6 +3,7 @@ comptime FieldNumber = Int32
 comptime Tag = UInt32
 comptime VarInt = UInt64
 
+
 @fieldwise_init
 struct WireType(Equatable, ImplicitlyCopyable):
     var value: UInt8
@@ -17,4 +18,3 @@ struct WireType(Equatable, ImplicitlyCopyable):
 
     def __ne__(self, other: Self) -> Bool:
         return not (self == other)
-
