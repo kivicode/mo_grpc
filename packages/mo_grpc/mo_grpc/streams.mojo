@@ -14,7 +14,7 @@ struct GrpcServerStream[Resp: ProtoSerializable & Copyable]:
     def __init__(out self):
         self._done = False
 
-    def recv(mut self) raises -> Optional[Resp]:
+    def recv(mut self) raises -> Optional[Self.Resp]:
         """Returns the next response, or None when the stream is complete."""
         raise Error("GrpcServerStream.recv: transport not implemented")
 
@@ -25,10 +25,10 @@ struct GrpcClientStream[Req: ProtoSerializable & Copyable, Resp: ProtoSerializab
     def __init__(out self):
         pass
 
-    def send(mut self, msg: Req) raises:
+    def send(mut self, msg: Self.Req) raises:
         raise Error("GrpcClientStream.send: transport not implemented")
 
-    def close_and_recv(mut self) raises -> Resp:
+    def close_and_recv(mut self) raises -> Self.Resp:
         raise Error("GrpcClientStream.close_and_recv: transport not implemented")
 
 
@@ -38,10 +38,10 @@ struct GrpcBidiStream[Req: ProtoSerializable & Copyable, Resp: ProtoSerializable
     def __init__(out self):
         pass
 
-    def send(mut self, msg: Req) raises:
+    def send(mut self, msg: Self.Req) raises:
         raise Error("GrpcBidiStream.send: transport not implemented")
 
-    def recv(mut self) raises -> Optional[Resp]:
+    def recv(mut self) raises -> Optional[Self.Resp]:
         raise Error("GrpcBidiStream.recv: transport not implemented")
 
     def close_send(mut self) raises:

@@ -9,7 +9,7 @@ from mo_grpc.streams import GrpcServerStream, GrpcClientStream, GrpcBidiStream
 from mo_grpc.transport import http_post
 
 
-struct GrpcChannel:
+struct GrpcChannel(Copyable, Movable):
     var base_url: String
 
     def __init__(out self, base_url: String):

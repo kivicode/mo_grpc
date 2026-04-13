@@ -689,8 +689,8 @@ def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
     out += "\n\n"
     out += ts(t"struct {name}Stub:\n")
     out += "    var _channel: GrpcChannel\n"
-    out += "\n    def __init__(out self, channel: GrpcChannel):\n"
-    out += "        self._channel = channel\n"
+    out += "\n    def __init__(out self, var channel: GrpcChannel):\n"
+    out += "        self._channel = channel^\n"
 
     for m in svc.method:
         var mname = m.name.value() if m.name else "Unknown"

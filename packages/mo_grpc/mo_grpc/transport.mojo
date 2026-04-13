@@ -56,6 +56,13 @@ def http_post(url: String, body: Bytes, content_type: String = "application/grpc
     if r != Result.OK:
         raise Error("curl.post_fields: " + easy.describe_error(r))
 
+    # CURLOPT_POSTFIELDS resets POSTFIELDSIZE to -1 (i.e. strlen()), so it must
+    # be re-asserted after post_fields(), otherwise binary bodies that begin
+    # with a null byte (gRPC frames, for example) get sent as zero bytes.
+    r = easy.post_field_size(len(body))
+    if r != Result.OK:
+        raise Error("curl.post_field_size: " + easy.describe_error(r))
+
     r = easy.http_version(HTTP_VERSION_2TLS)
     if r != Result.OK:
         raise Error("curl.http_version: " + easy.describe_error(r))
