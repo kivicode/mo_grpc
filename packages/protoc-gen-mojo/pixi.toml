@@ -1,16 +1,17 @@
 [workspace]
-authors = ["KiviCode <kivicode@yandex.com>"]
+authors = ["KiviCode <kivicode.dev@gmail.com>"]
 channels = [
     "https://conda.modular.com/max",
     "conda-forge",
-    "https://repo.prefix.dev/mojo-community",
+    "https://repo.prefix.dev/modular-community",
 ]
 name = "protoc-gen-mojo"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 description = "protoc plugin that generates Mojo structs + gRPC stubs from .proto files."
 license = "MIT"
+license-file = "LICENSE"
 readme = "README.md"
-repository = "https://github.com/KiviCode/ouroboros"
+repository = "https://github.com/kivicode/mo_grpc"
 preview = ["pixi-build"]
 
 [package]
@@ -37,4 +38,3 @@ mo_protobuf = { path = "../mo_protobuf" }
 
 [tasks]
 build = { cmd = "pixi build -o ." }
-publish = { cmd = "find . -name 'protoc-gen-mojo-*.conda' | xargs pixi upload https://prefix.dev/api/v1/upload/mojo-community" }

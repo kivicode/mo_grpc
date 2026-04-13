@@ -9,7 +9,7 @@ gRPC client + runtime for Mojo.
 - `GrpcServerStream`, `GrpcClientStream`, `GrpcBidiStream` — stream handle types (unary is implemented; streaming variants require the libcurl multi handle and are TODO)
 - `http_post(url, body) -> Bytes` — low-level HTTPS POST helper
 
-Depends on [`mo_protobuf`](https://github.com/KiviCode/ouroboros/tree/main/packages/mo_protobuf), `mojo-curl`, and the `curl_wrapper` C shim.
+Depends on [`mo_protobuf`](https://github.com/kivicode/mo_grpc/tree/main/packages/mo_protobuf), `mojo-curl`, and the `curl_wrapper` C shim.
 
 ## Install
 
