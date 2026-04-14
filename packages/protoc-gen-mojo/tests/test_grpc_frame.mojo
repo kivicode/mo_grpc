@@ -30,7 +30,7 @@ def test_encode_empty() raises:
 
 def test_encode_small() raises:
     var body = make_bytes([0xDE, 0xAD, 0xBE, 0xEF])
-    var frame = encode_grpc_frame(body)
+    var frame = encode_grpc_frame(body^)
     assert_equal(len(frame), 9)  # 5 header + 4 body
     assert_equal(frame[0], UInt8(0))
     assert_equal(frame[1], UInt8(0))
@@ -48,7 +48,7 @@ def test_encode_large_length_be() raises:
     var body = Bytes()
     for _ in range(300):
         body.append(UInt8(0x42))
-    var frame = encode_grpc_frame(body)
+    var frame = encode_grpc_frame(body^)
     assert_equal(len(frame), 305)
     # 300 = 0x012C -> big-endian bytes [0x00, 0x00, 0x01, 0x2C]
     assert_equal(frame[1], UInt8(0x00))
@@ -62,8 +62,8 @@ def test_encode_large_length_be() raises:
 
 def test_decode_roundtrip() raises:
     var original = make_bytes([0x11, 0x22, 0x33, 0x44, 0x55])
-    var frame = encode_grpc_frame(original)
-    var split = decode_grpc_frame(frame)
+    var frame = encode_grpc_frame(original^)
+    var split = decode_grpc_frame(frame^)
     assert_equal(len(split.body), 5)
     assert_equal(split.body[0], UInt8(0x11))
     assert_equal(split.body[4], UInt8(0x55))
@@ -75,20 +75,20 @@ def test_decode_two_frames() raises:
     var a = make_bytes([0xAA, 0xBB])
     var b = make_bytes([0xCC])
     var buf = Bytes()
-    var fa = encode_grpc_frame(a)
-    var fb = encode_grpc_frame(b)
+    var fa = encode_grpc_frame(a^)
+    var fb = encode_grpc_frame(b^)
     for i in range(len(fa)):
         buf.append(fa[i])
     for i in range(len(fb)):
         buf.append(fb[i])
 
-    var first = decode_grpc_frame(buf)
+    var first = decode_grpc_frame(buf^)
     assert_equal(len(first.body), 2)
     assert_equal(first.body[0], UInt8(0xAA))
     assert_equal(first.body[1], UInt8(0xBB))
     assert_equal(len(first.remainder), 6)  # second frame: 5 header + 1 body
 
-    var second = decode_grpc_frame(first.remainder)
+    var second = decode_grpc_frame(first.remainder.copy())
     assert_equal(len(second.body), 1)
     assert_equal(second.body[0], UInt8(0xCC))
     assert_equal(len(second.remainder), 0)
@@ -98,7 +98,7 @@ def test_decode_too_short() raises:
     var truncated = make_bytes([0x00, 0x00, 0x00])  # only 3 bytes, header needs 5
     var caught = False
     try:
-        _ = decode_grpc_frame(truncated)
+        _ = decode_grpc_frame(truncated^)
     except:
         caught = True
     assert_true(caught)
@@ -108,7 +108,7 @@ def test_decode_truncated_body() raises:
     var frame = make_bytes([0, 0, 0, 0, 5, 0x41, 0x42])  # claims 5 body bytes, has 2
     var caught = False
     try:
-        _ = decode_grpc_frame(frame)
+        _ = decode_grpc_frame(frame^)
     except:
         caught = True
     assert_true(caught)
