@@ -22,4 +22,8 @@ message StatusRequest {
 
 message StatusReply {
   string echo = 1;
+  // Custom (non-transport) request metadata the server saw. Each entry is
+  // formatted as "key=value", lower-cased on both ends. Used by the
+  // metadata test to verify what actually landed on the wire.
+  repeated string seen_metadata = 2;
 }

@@ -34,19 +34,49 @@ class HeavyServicer(heavy_pb2_grpc.HeavyServicer):
         return request
 
 
+_TRANSPORT_METADATA_KEYS = frozenset({
+    # Keys grpcio surfaces in invocation_metadata() that are owned by the
+    # transport / framework, not by the application. The metadata tests want
+    # to see what *the user* sent, not what libcurl + grpcio added.
+    "user-agent",
+    "accept",
+    "accept-encoding",
+    "content-length",
+    "content-type",
+    "te",
+    "grpc-accept-encoding",
+})
+
+
 class StatusProbeServicer(status_probe_pb2_grpc.StatusProbeServicer):
     """Echoes `request.echo` on OK; otherwise aborts with the requested gRPC
     status + message so the Mojo client can verify trailer parsing.
 
     `delay_ms` makes the server sleep before responding; the deadline tests
     use it to force the client-side timeout to fire.
+
+    `seen_metadata` on the reply lists the user-set request metadata keys
+    the server actually saw, so the metadata test can verify what landed on
+    the wire end-to-end.
     """
 
     def Run(self, request, context):
         if request.delay_ms > 0:
             time.sleep(request.delay_ms / 1000.0)
+
+        seen = []
+        for key, value in context.invocation_metadata():
+            if key in _TRANSPORT_METADATA_KEYS:
+                continue
+            if key.startswith("grpc-"):
+                continue
+            seen.append(f"{key}={value}")
+        seen.sort()  # stable for tests
+
         if request.code == 0:
-            return status_probe_pb2.StatusReply(echo=request.echo)
+            return status_probe_pb2.StatusReply(
+                echo=request.echo, seen_metadata=seen
+            )
         context.abort(_status_code_for(request.code), request.message)
 
 
