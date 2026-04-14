@@ -6,6 +6,7 @@
 import os
 import sys
 import signal
+import time
 from concurrent import futures
 
 import grpc
@@ -35,9 +36,15 @@ class HeavyServicer(heavy_pb2_grpc.HeavyServicer):
 
 class StatusProbeServicer(status_probe_pb2_grpc.StatusProbeServicer):
     """Echoes `request.echo` on OK; otherwise aborts with the requested gRPC
-    status + message so the Mojo client can verify trailer parsing."""
+    status + message so the Mojo client can verify trailer parsing.
+
+    `delay_ms` makes the server sleep before responding; the deadline tests
+    use it to force the client-side timeout to fire.
+    """
 
     def Run(self, request, context):
+        if request.delay_ms > 0:
+            time.sleep(request.delay_ms / 1000.0)
         if request.code == 0:
             return status_probe_pb2.StatusReply(echo=request.echo)
         context.abort(_status_code_for(request.code), request.message)

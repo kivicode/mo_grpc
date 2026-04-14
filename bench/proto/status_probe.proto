@@ -15,6 +15,9 @@ message StatusRequest {
   string message = 2;
   // Echoed back unchanged on OK so we can verify the body still parses.
   string echo = 3;
+  // Sleep this long server-side before responding. Used by deadline tests
+  // to force the client-side timeout to fire.
+  int32 delay_ms = 4;
 }
 
 message StatusReply {
