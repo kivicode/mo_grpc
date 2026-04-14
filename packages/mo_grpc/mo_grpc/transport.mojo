@@ -73,7 +73,7 @@ def _validate_metadata_key(key: String) raises:
         raise Error("metadata key must not be empty")
 
     # 1. HTTP/2 pseudo-headers (`:method`, `:scheme`, `:path`, `:authority`).
-    if key_bytes[0] == ord(":"):
+    if key_bytes[0] == UInt8(ord(":")):
         raise Error(
             "metadata key '" + key + "' is an HTTP/2 pseudo-header"
         )

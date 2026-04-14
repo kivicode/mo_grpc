@@ -47,7 +47,7 @@ def emit_init_files(
     var parts = List[String]()
     var seg = List[UInt8]()
     for i in range(name_end):
-        if b[i] == ord("/"):
+        if b[i] == UInt8(ord("/")):
             parts.append(String(unsafe_from_utf8=seg^))
             seg = List[UInt8]()
         else:

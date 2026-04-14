@@ -4,11 +4,12 @@
 """
 
 from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable
+from mo_protobuf.common import FieldNumber, WireType
 from protoc_gen_mojo.gen.google.protobuf.descriptor import *
 
 
 @fieldwise_init
-struct Version(Copyable, ProtoSerializable):
+struct Version(ProtoSerializable, Copyable, Movable):
     var major: Optional[Int32]
     var minor: Optional[Int32]
     var patch: Optional[Int32]
@@ -24,7 +25,8 @@ struct Version(Copyable, ProtoSerializable):
     def parse(mut reader: ProtoReader) raises -> Self:
         var instance = Self()
         while reader.has_more():
-            var field_number, wire_type = reader.read_tag()
+            var wire_tag = reader.read_varint()
+            var field_number = Int(wire_tag >> 3)
 
             if field_number == 1:
                 instance.major = reader.read_int32()
@@ -35,11 +37,10 @@ struct Version(Copyable, ProtoSerializable):
             elif field_number == 4:
                 instance.suffix = reader.read_string()
             else:
-                reader.skip_field(wire_type)
+                reader.skip_field(WireType(UInt8(wire_tag & 0x07)))
         return instance^
 
     def serialize(self, mut writer: ProtoWriter):
-        var sub = ProtoWriter()
         if self.major:
             writer.write_int32(1, self.major.value())
         if self.minor:
@@ -51,7 +52,7 @@ struct Version(Copyable, ProtoSerializable):
 
 
 @fieldwise_init
-struct CodeGeneratorRequest(Copyable, ProtoSerializable):
+struct CodeGeneratorRequest(ProtoSerializable, Copyable, Movable):
     var file_to_generate: List[String]
     var parameter: Optional[String]
     var proto_file: List[FileDescriptorProto]
@@ -68,48 +69,54 @@ struct CodeGeneratorRequest(Copyable, ProtoSerializable):
     @staticmethod
     def parse(mut reader: ProtoReader) raises -> Self:
         var instance = Self()
+        instance.file_to_generate.reserve(8)
+        instance.proto_file.reserve(8)
+        instance.source_file_descriptors.reserve(8)
         while reader.has_more():
-            var field_number, wire_type = reader.read_tag()
+            var wire_tag = reader.read_varint()
+            var field_number = Int(wire_tag >> 3)
 
             if field_number == 1:
                 instance.file_to_generate.append(reader.read_string())
             elif field_number == 2:
                 instance.parameter = reader.read_string()
             elif field_number == 15:
-                var sub = reader.read_message()
-                instance.proto_file.append(FileDescriptorProto.parse(sub))
+                var saved_end = reader.push_limit()
+                instance.proto_file.append(FileDescriptorProto.parse(reader))
+                reader.pop_limit(saved_end)
             elif field_number == 17:
-                var sub = reader.read_message()
-                instance.source_file_descriptors.append(FileDescriptorProto.parse(sub))
+                var saved_end = reader.push_limit()
+                instance.source_file_descriptors.append(FileDescriptorProto.parse(reader))
+                reader.pop_limit(saved_end)
             elif field_number == 3:
-                var sub = reader.read_message()
-                instance.compiler_version = Version.parse(sub)
+                var saved_end = reader.push_limit()
+                instance.compiler_version = Version.parse(reader)
+                reader.pop_limit(saved_end)
             else:
-                reader.skip_field(wire_type)
+                reader.skip_field(WireType(UInt8(wire_tag & 0x07)))
         return instance^
 
     def serialize(self, mut writer: ProtoWriter):
-        var sub = ProtoWriter()
         for item in self.file_to_generate:
             writer.write_string(1, item)
         if self.parameter:
             writer.write_string(2, self.parameter.value())
         for item in self.proto_file:
-            sub = ProtoWriter()
-            item.serialize(sub)
-            writer.write_message(15, sub)
+            var len_slot = writer.begin_message(15)
+            item.serialize(writer)
+            writer.end_message(len_slot)
         for item in self.source_file_descriptors:
-            sub = ProtoWriter()
-            item.serialize(sub)
-            writer.write_message(17, sub)
+            var len_slot = writer.begin_message(17)
+            item.serialize(writer)
+            writer.end_message(len_slot)
         if self.compiler_version:
-            sub = ProtoWriter()
-            self.compiler_version.value().serialize(sub)
-            writer.write_message(3, sub)
+            var len_slot = writer.begin_message(3)
+            self.compiler_version.value().serialize(writer)
+            writer.end_message(len_slot)
 
 
 @fieldwise_init
-struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
+struct CodeGeneratorResponseFile(ProtoSerializable, Copyable, Movable):
     var name: Optional[String]
     var insertion_point: Optional[String]
     var content: Optional[String]
@@ -125,7 +132,8 @@ struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
     def parse(mut reader: ProtoReader) raises -> Self:
         var instance = Self()
         while reader.has_more():
-            var field_number, wire_type = reader.read_tag()
+            var wire_tag = reader.read_varint()
+            var field_number = Int(wire_tag >> 3)
 
             if field_number == 1:
                 instance.name = reader.read_string()
@@ -134,14 +142,14 @@ struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
             elif field_number == 15:
                 instance.content = reader.read_string()
             elif field_number == 16:
-                var sub = reader.read_message()
-                instance.generated_code_info = GeneratedCodeInfo.parse(sub)
+                var saved_end = reader.push_limit()
+                instance.generated_code_info = GeneratedCodeInfo.parse(reader)
+                reader.pop_limit(saved_end)
             else:
-                reader.skip_field(wire_type)
+                reader.skip_field(WireType(UInt8(wire_tag & 0x07)))
         return instance^
 
     def serialize(self, mut writer: ProtoWriter):
-        var sub = ProtoWriter()
         if self.name:
             writer.write_string(1, self.name.value())
         if self.insertion_point:
@@ -149,19 +157,19 @@ struct CodeGeneratorResponseFile(Copyable, ProtoSerializable):
         if self.content:
             writer.write_string(15, self.content.value())
         if self.generated_code_info:
-            sub = ProtoWriter()
-            self.generated_code_info.value().serialize(sub)
-            writer.write_message(16, sub)
+            var len_slot = writer.begin_message(16)
+            self.generated_code_info.value().serialize(writer)
+            writer.end_message(len_slot)
 
 
 @fieldwise_init
-struct Feature(Equatable, ImplicitlyCopyable, ProtoSerializable):
+struct Feature(ProtoSerializable, Equatable, ImplicitlyCopyable):
     var _value: Int
-
+    
     comptime FEATURE_NONE = Feature(0)
-
+    
     comptime FEATURE_PROTO3_OPTIONAL = Feature(1)
-
+    
     comptime FEATURE_SUPPORTS_EDITIONS = Feature(2)
 
     @staticmethod
@@ -179,7 +187,7 @@ struct Feature(Equatable, ImplicitlyCopyable, ProtoSerializable):
 
 
 @fieldwise_init
-struct CodeGeneratorResponse(Copyable, ProtoSerializable):
+struct CodeGeneratorResponse(ProtoSerializable, Copyable, Movable):
     var error: Optional[String]
     var supported_features: Optional[UInt64]
     var minimum_edition: Optional[Int32]
@@ -196,8 +204,10 @@ struct CodeGeneratorResponse(Copyable, ProtoSerializable):
     @staticmethod
     def parse(mut reader: ProtoReader) raises -> Self:
         var instance = Self()
+        instance.file.reserve(8)
         while reader.has_more():
-            var field_number, wire_type = reader.read_tag()
+            var wire_tag = reader.read_varint()
+            var field_number = Int(wire_tag >> 3)
 
             if field_number == 1:
                 instance.error = reader.read_string()
@@ -208,14 +218,14 @@ struct CodeGeneratorResponse(Copyable, ProtoSerializable):
             elif field_number == 4:
                 instance.maximum_edition = reader.read_int32()
             elif field_number == 15:
-                var sub = reader.read_message()
-                instance.file.append(CodeGeneratorResponseFile.parse(sub))
+                var saved_end = reader.push_limit()
+                instance.file.append(CodeGeneratorResponseFile.parse(reader))
+                reader.pop_limit(saved_end)
             else:
-                reader.skip_field(wire_type)
+                reader.skip_field(WireType(UInt8(wire_tag & 0x07)))
         return instance^
 
     def serialize(self, mut writer: ProtoWriter):
-        var sub = ProtoWriter()
         if self.error:
             writer.write_string(1, self.error.value())
         if self.supported_features:
@@ -225,6 +235,6 @@ struct CodeGeneratorResponse(Copyable, ProtoSerializable):
         if self.maximum_edition:
             writer.write_int32(4, self.maximum_edition.value())
         for item in self.file:
-            sub = ProtoWriter()
-            item.serialize(sub)
-            writer.write_message(15, sub)
+            var len_slot = writer.begin_message(15)
+            item.serialize(writer)
+            writer.end_message(len_slot)

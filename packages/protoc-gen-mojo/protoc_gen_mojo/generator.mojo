@@ -1,4 +1,4 @@
-from collections import Dict
+from std.collections import Dict
 from protoc_gen_mojo.gen.google.protobuf.descriptor import (
     FileDescriptorProto,
     DescriptorProto,
@@ -646,19 +646,32 @@ def generate_message(
                     out += ts(t"            writer.write_{e.val_read_fn}(2, item.value)\n")
                 out += "            writer.end_message(entry_slot)\n"
             elif f.type and f.type.value() == Type.TYPE_MESSAGE:
+                var is_self_ref = field_base_type(f, renamings, scalar_types) == full
                 if is_rep:
                     out += ts(t"        for item in self.{fname}:\n")
                     out += ts(t"            var len_slot = writer.begin_message({num})\n")
-                    out += "            item.serialize(writer)\n"
+                    if is_self_ref:
+                        out += "            var ser = Self.serialize\n"
+                        out += "            ser(item, writer)\n"
+                    else:
+                        out += "            item.serialize(writer)\n"
                     out += "            writer.end_message(len_slot)\n"
                 elif is_opt:
                     out += ts(t"        if self.{fname}:\n")
                     out += ts(t"            var len_slot = writer.begin_message({num})\n")
-                    out += ts(t"            self.{fname}.value().serialize(writer)\n")
+                    if is_self_ref:
+                        out += "            var ser = Self.serialize\n"
+                        out += ts(t"            ser(self.{fname}.value(), writer)\n")
+                    else:
+                        out += ts(t"            self.{fname}.value().serialize(writer)\n")
                     out += "            writer.end_message(len_slot)\n"
                 else:  # required message
                     out += ts(t"        var len_slot = writer.begin_message({num})\n")
-                    out += ts(t"        self.{fname}.serialize(writer)\n")
+                    if is_self_ref:
+                        out += "        var ser = Self.serialize\n"
+                        out += ts(t"        ser(self.{fname}, writer)\n")
+                    else:
+                        out += ts(t"        self.{fname}.serialize(writer)\n")
                     out += "        writer.end_message(len_slot)\n"
             elif f.type and f.type.value() == Type.TYPE_ENUM:
                 if is_rep:
