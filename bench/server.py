@@ -15,6 +15,8 @@ import echo_pb2
 import echo_pb2_grpc
 import heavy_pb2
 import heavy_pb2_grpc
+import status_probe_pb2
+import status_probe_pb2_grpc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CERT = os.path.join(HERE, "certs", "server.crt")
@@ -31,6 +33,28 @@ class HeavyServicer(heavy_pb2_grpc.HeavyServicer):
         return request
 
 
+class StatusProbeServicer(status_probe_pb2_grpc.StatusProbeServicer):
+    """Echoes `request.echo` on OK; otherwise aborts with the requested gRPC
+    status + message so the Mojo client can verify trailer parsing."""
+
+    def Run(self, request, context):
+        if request.code == 0:
+            return status_probe_pb2.StatusReply(echo=request.echo)
+        context.abort(_status_code_for(request.code), request.message)
+
+
+def _status_code_for(code: int) -> grpc.StatusCode:
+    """Map an integer gRPC status code to grpcio's StatusCode enum.
+
+    grpcio's StatusCode members are tuples of (int_code, name); `abort()`
+    wants the enum member, not a bare int.
+    """
+    for status_code in grpc.StatusCode:
+        if status_code.value[0] == code:
+            return status_code
+    return grpc.StatusCode.UNKNOWN
+
+
 def main():
     port = int(os.environ.get("BENCH_PORT", "50443"))
     server = grpc.server(
@@ -42,6 +66,7 @@ def main():
     )
     echo_pb2_grpc.add_EchoServicer_to_server(EchoServicer(), server)
     heavy_pb2_grpc.add_HeavyServicer_to_server(HeavyServicer(), server)
+    status_probe_pb2_grpc.add_StatusProbeServicer_to_server(StatusProbeServicer(), server)
 
     with open(KEY, "rb") as f:
         key = f.read()

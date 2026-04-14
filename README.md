@@ -41,28 +41,28 @@ Legend: ✅ implemented and tested · ⚠️ partial · ❌ not implemented
 
 ### gRPC
 
-| Feature                              | Status | Notes                                                                        |
-| ------------------------------------ | :----: | ---------------------------------------------------------------------------- |
-| 5-byte frame codec (encode + decode) |   ✅   | `encode_grpc_frame`, `decode_grpc_frame`                                     |
-| Client code generation               |   ✅   | `<Service>Stub` struct, one method per RPC                                   |
-| Server trait generation              |   ✅   | `<Service>Servicer` trait with method stubs                                  |
-| Unary ↔ unary                        |   ✅   | `GrpcChannel.unary_unary[Req, Resp]` - fully wired through libcurl           |
-| HTTP/2                               |   ✅   | `CURL_HTTP_VERSION_2TLS` - negotiates HTTP/2 via ALPN, falls back to 1.1     |
-| TLS / `https://`                     |   ✅   | Automatic via libcurl                                                        |
-| Server-streaming RPC                 |   ❌   | Requires libcurl multi handle + incremental frame parsing (TODO)             |
-| Client-streaming RPC                 |   ❌   | Requires libcurl read callback (TODO)                                        |
-| Bidi-streaming RPC                   |   ❌   | Requires multi handle (TODO)                                                 |
-| Server-side runtime (HTTP/2 server)  |   ❌   | Trait is generated; no server dispatcher yet                                 |
-| gRPC status code / trailer parsing   |   ❌   | Transport raises on HTTP error; does not parse `grpc-status` trailer         |
-| Deadlines / timeouts                 |   ❌   |                                                                              |
-| Cancellation                         |   ❌   |                                                                              |
-| Metadata (headers) - send            |   ⚠️   | Hard-coded to `Content-Type: application/grpc`, `TE: trailers`, `User-Agent` |
-| Metadata (headers) - receive         |   ❌   | Write callback only captures the body                                        |
-| mTLS / client certs                  |   ❌   | libcurl supports it; not exposed on `GrpcChannel`                            |
-| Auth (bearer tokens, OAuth2)         |   ❌   |                                                                              |
-| Compression (gzip, snappy)           |   ❌   | Frame codec always writes compression-flag = 0                               |
-| Retry / reconnection                 |   ❌   |                                                                              |
-| gRPC reflection                      |   ❌   |                                                                              |
+| Feature                              | Status | Notes                                                                                                        |
+| ------------------------------------ | :----: | ------------------------------------------------------------------------------------------------------------ |
+| 5-byte frame codec (encode + decode) |   ✅   | `encode_grpc_frame`, `decode_grpc_frame`                                                                     |
+| Client code generation               |   ✅   | `<Service>Stub` struct, one method per RPC                                                                   |
+| Server trait generation              |   ✅   | `<Service>Servicer` trait with method stubs                                                                  |
+| Unary ↔ unary                        |   ✅   | `GrpcChannel.unary_unary[Req, Resp]` - fully wired through libcurl                                           |
+| HTTP/2                               |   ✅   | `CURL_HTTP_VERSION_2TLS` - negotiates HTTP/2 via ALPN, falls back to 1.1                                     |
+| TLS / `https://`                     |   ✅   | Automatic via libcurl                                                                                        |
+| Server-streaming RPC                 |   ❌   | Requires libcurl multi handle + incremental frame parsing (TODO)                                             |
+| Client-streaming RPC                 |   ❌   | Requires libcurl read callback (TODO)                                                                        |
+| Bidi-streaming RPC                   |   ❌   | Requires multi handle (TODO)                                                                                 |
+| Server-side runtime (HTTP/2 server)  |   ❌   | Trait is generated; no server dispatcher yet                                                                 |
+| gRPC status code / trailer parsing   |   ✅   | `grpc-status` + `grpc-message` parsed from trailers / trailers-only headers; non-OK raises typed `GrpcError` |
+| Deadlines / timeouts                 |   ❌   |                                                                                                              |
+| Cancellation                         |   ❌   |                                                                                                              |
+| Metadata (headers) - send            |   ⚠️   | Hard-coded to `Content-Type: application/grpc`, `TE: trailers`, `User-Agent`                                 |
+| Metadata (headers) - receive         |   ❌   | Write callback only captures the body                                                                        |
+| mTLS / client certs                  |   ❌   | libcurl supports it; not exposed on `GrpcChannel`                                                            |
+| Auth (bearer tokens, OAuth2)         |   ❌   |                                                                                                              |
+| Compression (gzip, snappy)           |   ❌   | Frame codec always writes compression-flag = 0                                                               |
+| Retry / reconnection                 |   ❌   |                                                                                                              |
+| gRPC reflection                      |   ❌   |                                                                                                              |
 
 ## Benchmarks
 

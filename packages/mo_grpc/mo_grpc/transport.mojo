@@ -126,10 +126,16 @@ def http_post(
     """
     var easy = Easy()
     var headers = grpc_headers(content_type)
+    var response = Bytes()
+    var perform_err = String("")
     try:
-        var response = perform_post(easy, headers, url, body)
-        headers^.free()
-        return response^
+        response = perform_post(easy, headers, url, body)
     except e:
-        headers^.free()
-        raise e
+        perform_err = String(e)
+        
+    headers^.free()
+
+    if len(perform_err) > 0:
+        raise Error(perform_err)
+
+    return response^

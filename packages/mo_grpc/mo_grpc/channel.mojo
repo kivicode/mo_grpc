@@ -3,11 +3,21 @@ Client-side transport abstraction.
 """
 
 from mojo_curl import Easy, CurlList
+from mojo_curl.c.header import HeaderOrigin
 from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable
 from mo_protobuf.common import Bytes
 from mo_grpc.frame import encode_grpc_frame, decode_grpc_frame, decode_grpc_body, FRAME_HEADER_LEN
+from mo_grpc.status import GrpcError, GRPC_STATUS_OK, GRPC_STATUS_UNKNOWN
 from mo_grpc.streams import GrpcServerStream, GrpcClientStream, GrpcBidiStream
 from mo_grpc.transport import grpc_headers, http_post, perform_post
+
+
+# `CURLH_*` bits from `curl/header.h`. gRPC normally sends `grpc-status` in
+# the HTTP/2 trailers, but a "trailers-only" reply (the optimization for
+# non-OK statuses with no body) puts it in the *initial* HEADERS frame
+# instead, so the channel has to look in both buckets.
+comptime CURLH_HEADER  = 1
+comptime CURLH_TRAILER = 2
 
 
 struct GrpcChannel(Movable):
@@ -19,6 +29,38 @@ struct GrpcChannel(Movable):
     def __init__(out self, base_url: String):
         self.base_url = base_url
         self._easy = Easy()
+
+    def _lookup_grpc_header(mut self, name: String) raises -> Optional[String]:
+        """Look up a gRPC pseudo-header by name, checking the trailers first
+        and then the initial headers. Returns `None` if neither carries it."""
+        var trailers: Dict[String, String] = self._easy.headers(HeaderOrigin(CURLH_TRAILER))
+        var trailer_hit = trailers.get(name)
+        if trailer_hit:
+            return trailer_hit^
+
+        var headers: Dict[String, String] = self._easy.headers(HeaderOrigin(CURLH_HEADER))
+        return headers.get(name)
+
+    def _check_grpc_status(mut self) raises:
+        """Raise `GrpcError` if the response carries a non-OK `grpc-status`.
+
+        A missing `grpc-status` is treated as UNKNOWN — every compliant gRPC
+        server has to send one, so its absence means we're talking to
+        something that isn't gRPC (or the call never reached the server).
+        """
+        var status_str = self._lookup_grpc_header(String("grpc-status"))
+        if not status_str:
+            raise GrpcError(
+                GRPC_STATUS_UNKNOWN, String("missing grpc-status trailer")
+            ).to_error()
+
+        var code = Int(atol(status_str.value()))
+        if code == GRPC_STATUS_OK:
+            return
+
+        var message_opt = self._lookup_grpc_header(String("grpc-message"))
+        var message = message_opt.value() if message_opt else String("")
+        raise GrpcError(code, message^).to_error()
 
     def unary_unary[
         Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable
@@ -42,7 +84,7 @@ struct GrpcChannel(Movable):
         header_ptr[4] = UInt8(request_body_len & 0xFF)
 
         # Send and capture the response. `headers` must be freed on every
-        # path — Mojo's drop-check would otherwise refuse to compile this.
+        # path - Mojo's drop-check would otherwise refuse to compile this.
         var url = self.base_url + method
         var headers = grpc_headers()
         var framed_response = Bytes()
@@ -54,6 +96,8 @@ struct GrpcChannel(Movable):
         headers^.free()
         if len(transport_err) > 0:
             raise Error(transport_err)
+
+        self._check_grpc_status()
 
         # Parse the response in place: build a ProtoReader that owns the
         # entire framed buffer but starts past the 5-byte header.

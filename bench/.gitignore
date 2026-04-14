@@ -1,6 +1,7 @@
 # Binaries
 bench_mojo
 bench_heavy_mojo
+test_status
 
 certs/server.crt
 certs/server.key

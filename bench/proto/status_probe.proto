@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package bench;
+
+// A service whose only purpose is to make the server return a specific
+// gRPC status code, so the Mojo client can verify trailer parsing.
+service StatusProbe {
+  rpc Run (StatusRequest) returns (StatusReply);
+}
+
+message StatusRequest {
+  // Numeric gRPC status code the server should return. 0 = OK.
+  int32 code = 1;
+  // Optional human-readable message attached to the status.
+  string message = 2;
+  // Echoed back unchanged on OK so we can verify the body still parses.
+  string echo = 3;
+}
+
+message StatusReply {
+  string echo = 1;
+}

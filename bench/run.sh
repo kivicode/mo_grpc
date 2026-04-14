@@ -11,7 +11,7 @@ HEAVY_N="${HEAVY_N:-500}"
 PORT="${BENCH_PORT:-50443}"
 CACERT="$REPO/.pixi/envs/default/ssl/cacert.pem"
 
-PROTOS=(echo heavy)
+PROTOS=(echo heavy status_probe)
 
 step() {
   printf '\n>>> %s\n' "$*"
@@ -71,6 +71,7 @@ build_mojo() {
 
 build_mojo "$HERE/bench_mojo.mojo"       "$HERE/bench_mojo"
 build_mojo "$HERE/bench_heavy_mojo.mojo" "$HERE/bench_heavy_mojo"
+build_mojo "$HERE/test_status.mojo"      "$HERE/test_status"
 
 # -- 4. start the gRPC echo server ---------------------------------------------
 # We don't use a separate process group (`set -m`) because we *want* Ctrl-C to
@@ -105,7 +106,12 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
-# -- 5. run all four benches ---------------------------------------------------
+# -- 5. run correctness tests --------------------------------------------------
+echo
+cd "$REPO"
+BENCH_PORT="$PORT" "$HERE/test_status"
+
+# -- 6. run all four benches ---------------------------------------------------
 echo
 cd "$HERE"
 BENCH_N="$TINY_N" BENCH_PORT="$PORT" uv run bench_python.py
