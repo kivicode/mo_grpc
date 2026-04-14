@@ -54,7 +54,7 @@ Legend: ✅ implemented and tested · ⚠️ partial · ❌ not implemented
 | Bidi-streaming RPC                   |   ❌   | Requires multi handle (TODO)                                                                                 |
 | Server-side runtime (HTTP/2 server)  |   ❌   | Trait is generated; no server dispatcher yet                                                                 |
 | gRPC status code / trailer parsing   |   ✅   | `grpc-status` + `grpc-message` parsed from trailers / trailers-only headers; non-OK raises typed `GrpcError` |
-| Deadlines / timeouts                 |   ❌   |                                                                                                              |
+| Deadlines / timeouts                 |   ✅   | Per-call `timeout_ms` on every generated stub method; sets `CURLOPT_TIMEOUT_MS` and sends `grpc-timeout` for server enforcement; expiry → `GrpcError(DEADLINE_EXCEEDED)` |
 | Cancellation                         |   ❌   |                                                                                                              |
 | Metadata (headers) - send            |   ⚠️   | Hard-coded to `Content-Type: application/grpc`, `TE: trailers`, `User-Agent`                                 |
 | Metadata (headers) - receive         |   ❌   | Write callback only captures the body                                                                        |
