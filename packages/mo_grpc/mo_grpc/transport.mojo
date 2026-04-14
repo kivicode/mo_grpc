@@ -11,6 +11,7 @@ from mojo_curl.c.types import (
     Result,
 )
 from mo_protobuf.common import Bytes
+from mo_grpc.status import GrpcError, GRPC_STATUS_DEADLINE_EXCEEDED
 
 
 # HTTP_VERSION enum values, mirroring `CURL_HTTP_VERSION_*` from `curl.h`.
@@ -46,17 +47,26 @@ def _write_cb(
     return size * nmemb
 
 
-def grpc_headers(content_type: String = "application/grpc") raises -> CurlList:
-    """Build the standard gRPC client header set. Caller owns the returned
-    list and must `.free()` it once libcurl is done with it.
+def grpc_headers(
+    content_type: String = "application/grpc",
+    timeout_ms: Int = 0,
+) raises -> CurlList:
+    """Build the standard gRPC client header set.
+
+    When `timeout_ms > 0`, also adds a canonical `grpc-timeout: <n>m` header
+    so the *server* can enforce the deadline alongside the client-side
+    libcurl timeout. Format follows the gRPC spec:
+    `TimeoutValue TimeoutUnit` where unit `m` is milliseconds.
+
+    Caller owns the returned list and must `.free()` it when libcurl is done.
     """
-    return CurlList(
-        {
-            "Content-Type": content_type,
-            "TE": "trailers",
-            "User-Agent": "grpc-mojo/0.1",
-        }
-    )
+    var entries = Dict[String, String]()
+    entries[String("Content-Type")] = content_type
+    entries[String("TE")] = String("trailers")
+    entries[String("User-Agent")] = String("grpc-mojo/0.1")
+    if timeout_ms > 0:
+        entries[String("grpc-timeout")] = String(timeout_ms) + String("m")
+    return CurlList(entries^)
 
 
 def perform_post(
@@ -64,12 +74,21 @@ def perform_post(
     mut headers: CurlList,
     url: String,
     body: Bytes,
+    timeout_ms: Int = 0,
 ) raises -> Bytes:
     """Run a single POST on a borrowed Easy handle and return the response body.
 
     The caller owns both `easy` and `headers`. Reusing one Easy across many
     `perform_post` calls is the whole point of `GrpcChannel`: libcurl pools
     the underlying TCP / TLS / HTTP-2 connection on the easy handle.
+
+    `timeout_ms` is the per-call deadline in milliseconds. `0` (the default)
+    means no deadline — libcurl will wait forever. On a reused Easy handle
+    this option *persists across calls*, so we always set it explicitly here
+    (passing `0` clears any previous value).
+
+    On `Result.OPERATION_TIMEDOUT`, raises a typed `GrpcError(DEADLINE_EXCEEDED)`
+    instead of the generic `curl.perform` error so callers can branch on it.
     """
     var response = Bytes()
     var status: Result
@@ -107,7 +126,17 @@ def perform_post(
     if status != Result.OK:
         raise Error("curl.http_headers: " + easy.describe_error(status))
 
+    status = easy.timeout(timeout_ms)
+    if status != Result.OK:
+        raise Error("curl.timeout: " + easy.describe_error(status))
+
     status = easy.perform()
+    if status == Result.OPERATION_TIMEDOUT:
+        raise GrpcError(
+            GRPC_STATUS_DEADLINE_EXCEEDED,
+            String("client deadline exceeded after ") + String(timeout_ms) + String("ms"),
+        ).to_error()
+
     if status != Result.OK:
         raise Error("curl.perform: " + easy.describe_error(status))
 

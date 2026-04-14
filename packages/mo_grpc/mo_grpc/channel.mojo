@@ -64,8 +64,20 @@ struct GrpcChannel(Movable):
 
     def unary_unary[
         Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable
-    ](mut self, method: String, request: Req,) raises -> Resp:
-        """Send a single request, receive a single response over HTTP/2 + TLS."""
+    ](
+        mut self,
+        method: String,
+        request: Req,
+        timeout_ms: Int = 0,
+    ) raises -> Resp:
+        """Send a single request, receive a single response over HTTP/2 + TLS.
+
+        `timeout_ms = 0` (the default) means no client-side deadline. Any
+        positive value sets `CURLOPT_TIMEOUT_MS` on the libcurl handle *and*
+        sends the canonical `grpc-timeout: <n>m` request header so the server
+        can shed the request itself. On expiry the call raises a typed
+        `GrpcError(DEADLINE_EXCEEDED)`.
+        """
 
         # Serialize directly into a buffer that already has a reserved 5-byte
         # gRPC frame header, then back-patch the length. Avoids the encode/
@@ -84,13 +96,13 @@ struct GrpcChannel(Movable):
         header_ptr[4] = UInt8(request_body_len & 0xFF)
 
         # Send and capture the response. `headers` must be freed on every
-        # path - Mojo's drop-check would otherwise refuse to compile this.
+        # path — Mojo's drop-check would otherwise refuse to compile this.
         var url = self.base_url + method
-        var headers = grpc_headers()
+        var headers = grpc_headers(timeout_ms=timeout_ms)
         var framed_response = Bytes()
         var transport_err = String("")
         try:
-            framed_response = perform_post(self._easy, headers, url, framed_request)
+            framed_response = perform_post(self._easy, headers, url, framed_request, timeout_ms)
         except e:
             transport_err = String(e)
         headers^.free()

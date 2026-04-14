@@ -719,8 +719,8 @@ def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
         var cs = m.client_streaming and m.client_streaming.value()
         var ss = m.server_streaming and m.server_streaming.value()
         if not cs and not ss:
-            out += ts(t"\n    def {mname}(mut self, request: {req}) raises -> {resp}:\n")
-            out += ts(t'        return self._channel.unary_unary[{req}, {resp}]("{path}", request)\n')
+            out += ts(t"\n    def {mname}(mut self, request: {req}, timeout_ms: Int = 0) raises -> {resp}:\n")
+            out += ts(t'        return self._channel.unary_unary[{req}, {resp}]("{path}", request, timeout_ms)\n')
         elif not cs and ss:
             out += ts(t"\n    def {mname}(mut self, request: {req}) raises -> GrpcServerStream[{resp}]:\n")
             out += ts(t'        return self._channel.unary_stream[{req}, {resp}]("{path}", request)\n')
