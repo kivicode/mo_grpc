@@ -210,6 +210,7 @@ def generate_prelude(deps: List[String], module_prefix: String = "", has_service
         "   !!! DO NOT EDIT !!!\n"
         '"""\n\n'
         "from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable\n"
+        "from mo_protobuf.common import FieldNumber, WireType\n"
     )
     for dep in deps:
         var mod = proto_path_to_module(dep, module_prefix)
@@ -253,7 +254,7 @@ def get_oneof_fields(
 
 def generate_oneof_union(union_type: String, fields: List[OneofField], indent: Int = 0) -> String:
     """Generate a discriminant-tagged union struct for one oneof group."""
-    var out = ts(t"struct {union_type}(Copyable):\n")
+    var out = ts(t"struct {union_type}(Copyable, Movable):\n")
     out += "    var _tag: Int\n"
     for of in fields:
         out += ts(t"    var _{of.field_name}: Optional[{of.mojo_type}]\n")
@@ -394,7 +395,7 @@ def generate_message(
 
     # struct fields
     var out = String("@fieldwise_init\n")
-    out += ts(t"struct {full}(ProtoSerializable, Copyable):\n")
+    out += ts(t"struct {full}(ProtoSerializable, Copyable, Movable):\n")
     if len(desc.field) == 0 and len(oneof_by_fnum) == 0:
         out += "    ...\n"
     else:
@@ -467,9 +468,21 @@ def generate_message(
     out += "    @staticmethod\n"
     out += "    def parse(mut reader: ProtoReader) raises -> Self:\n"
     out += "        var instance = Self()\n"
+
+    # Pre-reserve a small initial capacity for every repeated field so the
+    # first few appends don't trigger O(log n) reallocations. Maps use Dict
+    # which has its own growth strategy and no `reserve` method.
+    for f in desc.field:
+        var fname = f.name.value() if f.name else "unknown"
+        var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
+        var is_map = Bool(get_map_entry(map_entries, f, full))
+        if is_rep and not is_map:
+            out += ts(t"        instance.{fname}.reserve(8)\n")
+
     out += "        while reader.has_more():\n"
-    out += "            var field_number, wire_type = reader.read_tag()\n"
-    out += "            \n"
+    out += "            var wire_tag = reader.read_varint()\n"
+    out += "            var field_number = Int(wire_tag >> 3)\n"
+    out += "\n"
     var first = True
     for f in desc.field:
         var fname = f.name.value() if f.name else "unknown"
@@ -485,8 +498,9 @@ def generate_message(
             var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
             var utype = full + capitalize_first(oname)
             if f.type and f.type.value() == Type.TYPE_MESSAGE:
-                out += "                var sub = reader.read_message()\n"
-                out += ts(t"                instance.{oname} = {utype}.{fname}({base}.parse(sub))\n")
+                out += "                var saved_end = reader.push_limit()\n"
+                out += ts(t"                instance.{oname} = {utype}.{fname}({base}.parse(reader))\n")
+                out += "                reader.pop_limit(saved_end)\n"
             elif f.type and f.type.value() == Type.TYPE_ENUM:
                 out += ts(t"                instance.{oname} = {utype}.{fname}({base}(Int(reader.read_enum())))\n")
             else:
@@ -497,7 +511,7 @@ def generate_message(
         var me_parse = get_map_entry(map_entries, f, full)
         if me_parse:
             var e = me_parse.value()
-            out += "                var entry = reader.read_message()\n"
+            out += "                var entry_end = reader.push_limit()\n"
             if e.key_mojo_type != "String":
                 out += ts(t"                var map_key = {e.key_mojo_type}()\n")
             else:
@@ -508,40 +522,45 @@ def generate_message(
                 out += ts(t"                var map_val = {e.val_mojo_type}()\n")
             else:
                 out += "                var map_val = String()\n"
-            out += "                while entry.has_more():\n"
-            out += "                    var kfn, kwt = entry.read_tag()\n"
-            out += "                    if kfn == 1:\n"
+            out += "                while reader.has_more():\n"
+            out += "                    var entry_tag = reader.read_varint()\n"
+            out += "                    var entry_field_number = Int(entry_tag >> 3)\n"
+            out += "                    if entry_field_number == 1:\n"
             if e.key_is_enum:
-                out += ts(t"                        map_key = {e.key_mojo_type}(Int(entry.read_enum()))\n")
+                out += ts(t"                        map_key = {e.key_mojo_type}(Int(reader.read_enum()))\n")
             else:
-                out += ts(t"                        map_key = entry.read_{e.key_read_fn}()\n")
-            out += "                    elif kfn == 2:\n"
+                out += ts(t"                        map_key = reader.read_{e.key_read_fn}()\n")
+            out += "                    elif entry_field_number == 2:\n"
             if e.val_is_message:
-                out += "                        var vsub = entry.read_message()\n"
-                out += ts(t"                        map_val_opt = {e.val_mojo_type}.parse(vsub)\n")
+                out += "                        var val_end = reader.push_limit()\n"
+                out += ts(t"                        map_val_opt = {e.val_mojo_type}.parse(reader)\n")
+                out += "                        reader.pop_limit(val_end)\n"
             elif e.val_is_enum:
-                out += ts(t"                        map_val = {e.val_mojo_type}(Int(entry.read_enum()))\n")
+                out += ts(t"                        map_val = {e.val_mojo_type}(Int(reader.read_enum()))\n")
             else:
-                out += ts(t"                        map_val = entry.read_{e.val_read_fn}()\n")
+                out += ts(t"                        map_val = reader.read_{e.val_read_fn}()\n")
             out += "                    else:\n"
-            out += "                        entry.skip_field(kwt)\n"
+            out += "                        reader.skip_field(WireType(UInt8(entry_tag & 0x07)))\n"
+            out += "                reader.pop_limit(entry_end)\n"
             if e.val_is_message:
                 out += "                if map_val_opt:\n"
-                out += ts(t"                    instance.{fname}[map_key] = map_val_opt.value()\n")
+                out += ts(t"                    instance.{fname}[map_key] = map_val_opt.value().copy()\n")
             else:
                 out += ts(t"                instance.{fname}[map_key] = map_val\n")
         elif f.type and f.type.value() == Type.TYPE_MESSAGE:
-            out += "                var sub = reader.read_message()\n"
+            out += "                var saved_end = reader.push_limit()\n"
             if is_rep:
-                out += ts(t"                instance.{fname}.append({base}.parse(sub))\n")
+                out += ts(t"                instance.{fname}.append({base}.parse(reader))\n")
             else:
-                out += ts(t"                instance.{fname} = {base}.parse(sub)\n")
+                out += ts(t"                instance.{fname} = {base}.parse(reader)\n")
+            out += "                reader.pop_limit(saved_end)\n"
         elif f.type and f.type.value() == Type.TYPE_ENUM:
             if is_rep:
-                out += "                if wire_type.value == 2:\n"
-                out += "                    var packed = reader.read_message()\n"
-                out += "                    while packed.has_more():\n"
-                out += ts(t"                        instance.{fname}.append({base}(Int(packed.read_enum())))\n")
+                out += "                if (wire_tag & 0x07) == 2:\n"
+                out += "                    var packed_end = reader.push_limit()\n"
+                out += "                    while reader.has_more():\n"
+                out += ts(t"                        instance.{fname}.append({base}(Int(reader.read_enum())))\n")
+                out += "                    reader.pop_limit(packed_end)\n"
                 out += "                else:\n"
                 out += ts(t"                    instance.{fname}.append({base}(Int(reader.read_enum())))\n")
             else:
@@ -552,16 +571,17 @@ def generate_message(
                 if fn_name == "string" or fn_name == "bytes":
                     out += ts(t"                instance.{fname}.append(reader.read_{fn_name}())\n")
                 else:
-                    out += "                if wire_type.value == 2:\n"
-                    out += "                    var packed = reader.read_message()\n"
-                    out += "                    while packed.has_more():\n"
-                    out += ts(t"                        instance.{fname}.append(packed.read_{fn_name}())\n")
+                    out += "                if (wire_tag & 0x07) == 2:\n"
+                    out += "                    var packed_end = reader.push_limit()\n"
+                    out += "                    while reader.has_more():\n"
+                    out += ts(t"                        instance.{fname}.append(reader.read_{fn_name}())\n")
+                    out += "                    reader.pop_limit(packed_end)\n"
                     out += "                else:\n"
                     out += ts(t"                    instance.{fname}.append(reader.read_{fn_name}())\n")
             else:
                 out += ts(t"                instance.{fname} = reader.read_{fn_name}()\n")
     out += "            else:\n"
-    out += "                reader.skip_field(wire_type)\n"
+    out += "                reader.skip_field(WireType(UInt8(wire_tag & 0x07)))\n"
     out += "        return instance^\n"
 
     # serialize
@@ -569,7 +589,6 @@ def generate_message(
     if len(desc.field) == 0:
         out += "        ...\n"
     else:
-        out += "        var sub = ProtoWriter()\n"
         var seen_oneof_ser = List[Int]()
         for f in desc.field:
             var fname = f.name.value() if f.name else "unknown"
@@ -598,9 +617,9 @@ def generate_message(
                         out += ts(t"            {gbranch} pu.is_{gf.field_name}():\n")
                         gfirst = False
                         if gf.is_message:
-                            out += "                sub = ProtoWriter()\n"
-                            out += ts(t"                pu.get_{gf.field_name}().serialize(sub)\n")
-                            out += ts(t"                writer.write_message({gnum}, sub)\n")
+                            out += ts(t"                var len_slot = writer.begin_message({gnum})\n")
+                            out += ts(t"                pu.get_{gf.field_name}().serialize(writer)\n")
+                            out += "                writer.end_message(len_slot)\n"
                         elif gf.is_enum:
                             out += ts(
                                 t"                writer.write_int32({gnum}, Int32(pu.get_{gf.field_name}()._value))\n"
@@ -612,35 +631,35 @@ def generate_message(
             if me_ser:
                 var e = me_ser.value()
                 out += ts(t"        for item in self.{fname}.items():\n")
-                out += "            sub = ProtoWriter()\n"
+                out += ts(t"            var entry_slot = writer.begin_message({num})\n")
                 if e.key_is_enum:
-                    out += "            sub.write_int32(1, Int32(item.key._value))\n"
+                    out += "            writer.write_int32(1, Int32(item.key._value))\n"
                 else:
-                    out += ts(t"            sub.write_{e.key_read_fn}(1, item.key)\n")
+                    out += ts(t"            writer.write_{e.key_read_fn}(1, item.key)\n")
                 if e.val_is_message:
-                    out += "            var vsub = ProtoWriter()\n"
-                    out += "            item.value.serialize(vsub)\n"
-                    out += "            sub.write_message(2, vsub)\n"
+                    out += "            var value_slot = writer.begin_message(2)\n"
+                    out += "            item.value.serialize(writer)\n"
+                    out += "            writer.end_message(value_slot)\n"
                 elif e.val_is_enum:
-                    out += "            sub.write_int32(2, Int32(item.value._value))\n"
+                    out += "            writer.write_int32(2, Int32(item.value._value))\n"
                 else:
-                    out += ts(t"            sub.write_{e.val_read_fn}(2, item.value)\n")
-                out += ts(t"            writer.write_message({num}, sub)\n")
+                    out += ts(t"            writer.write_{e.val_read_fn}(2, item.value)\n")
+                out += "            writer.end_message(entry_slot)\n"
             elif f.type and f.type.value() == Type.TYPE_MESSAGE:
                 if is_rep:
                     out += ts(t"        for item in self.{fname}:\n")
-                    out += "            sub = ProtoWriter()\n"
-                    out += "            item.serialize(sub)\n"
-                    out += ts(t"            writer.write_message({num}, sub)\n")
+                    out += ts(t"            var len_slot = writer.begin_message({num})\n")
+                    out += "            item.serialize(writer)\n"
+                    out += "            writer.end_message(len_slot)\n"
                 elif is_opt:
                     out += ts(t"        if self.{fname}:\n")
-                    out += "            sub = ProtoWriter()\n"
-                    out += ts(t"            self.{fname}.value().serialize(sub)\n")
-                    out += ts(t"            writer.write_message({num}, sub)\n")
+                    out += ts(t"            var len_slot = writer.begin_message({num})\n")
+                    out += ts(t"            self.{fname}.value().serialize(writer)\n")
+                    out += "            writer.end_message(len_slot)\n"
                 else:  # required message
-                    out += "        sub = ProtoWriter()\n"
-                    out += ts(t"        self.{fname}.serialize(sub)\n")
-                    out += ts(t"        writer.write_message({num}, sub)\n")
+                    out += ts(t"        var len_slot = writer.begin_message({num})\n")
+                    out += ts(t"        self.{fname}.serialize(writer)\n")
+                    out += "        writer.end_message(len_slot)\n"
             elif f.type and f.type.value() == Type.TYPE_ENUM:
                 if is_rep:
                     out += ts(t"        for item in self.{fname}:\n")

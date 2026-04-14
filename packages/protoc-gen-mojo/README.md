@@ -9,8 +9,8 @@ A [protoc](https://protobuf.dev/reference/protobuf/proto3-spec/) plugin that gen
 - Nested messages and enums
 - `map<K, V>` → `Dict[K, V]`
 - Cross-file imports with `--mojo_opt=module_prefix=...`
-- `oneof` — generates a discriminant-tagged union struct with type-safe factories and accessors
-- gRPC services — emits a server trait and a client stub for each `service` in the file, supporting all four streaming combinations
+- `oneof` - generates a discriminant-tagged union struct with type-safe factories and accessors
+- gRPC services - emits a server trait and a client stub for each `service` in the file, supporting all four streaming combinations
 
 Output is plain Mojo structs implementing [`mo_protobuf`](https://github.com/kivicode/mo_grpc/tree/main/packages/mo_protobuf)'s `ProtoSerializable` trait. gRPC stubs link against [`mo_grpc`](https://github.com/kivicode/mo_grpc/tree/main/packages/mo_grpc).
 
