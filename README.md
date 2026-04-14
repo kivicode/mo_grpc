@@ -56,10 +56,10 @@ Legend: ✅ implemented and tested · ⚠️ partial · ❌ not implemented
 | gRPC status code / trailer parsing   |   ✅   | `grpc-status` + `grpc-message` parsed from trailers / trailers-only headers; non-OK raises typed `GrpcError` |
 | Deadlines / timeouts                 |   ✅   | Per-call `timeout_ms` on every generated stub method; sets `CURLOPT_TIMEOUT_MS` and sends `grpc-timeout` for server enforcement; expiry → `GrpcError(DEADLINE_EXCEEDED)` |
 | Cancellation                         |   ❌   |                                                                                                              |
-| Metadata (headers) - send            |   ⚠️   | Hard-coded to `Content-Type: application/grpc`, `TE: trailers`, `User-Agent`                                 |
+| Metadata (headers) - send            |   ✅   | `metadata: Dict[String, String]` per call; lowercased + validated per gRPC spec; `grpc-*`, HTTP/2 pseudo-headers, transport-managed names rejected client-side |
 | Metadata (headers) - receive         |   ❌   | Write callback only captures the body                                                                        |
 | mTLS / client certs                  |   ❌   | libcurl supports it; not exposed on `GrpcChannel`                                                            |
-| Auth (bearer tokens, OAuth2)         |   ❌   |                                                                                                              |
+| Auth (bearer tokens, OAuth2)         |   ✅   | Pass `authorization: Bearer <token>` (or any custom auth header) via the `metadata` parameter                |
 | Compression (gzip, snappy)           |   ❌   | Frame codec always writes compression-flag = 0                                                               |
 | Retry / reconnection                 |   ❌   |                                                                                                              |
 | gRPC reflection                      |   ❌   |                                                                                                              |

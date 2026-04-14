@@ -47,35 +47,58 @@ def _write_cb(
     return size * nmemb
 
 
-# Header keys mo_grpc owns and the user MUST NOT pass via custom metadata.
-# Either the transport layer manages them (Content-Type / TE / User-Agent),
-# or HTTP/2 itself reserves them (Connection / Host / Transfer-Encoding), or
-# they're HTTP/2 pseudo-headers (anything starting with `:`). The `grpc-`
-# prefix is also reserved by the gRPC protocol for its own use.
-def _is_reserved_metadata_key(key: String) raises:
-    """Raise if `key` is a header the user is forbidden from setting via
-    custom metadata. Pure validation — no side effects."""
+def _ascii_lower(key: String) -> String:
+    """Return `key` with ASCII upper-case bytes folded to lower-case. Does
+    not validate or strip anything — used as a *prelude* to validation so
+    error messages talk about the canonical (lowered) form of the key."""
+    var key_bytes = key.as_bytes()
+    var out = Bytes()
+    out.reserve(len(key_bytes))
+    for i in range(len(key_bytes)):
+        var byte = Int(key_bytes[i])
+        if byte >= ord("A") and byte <= ord("Z"):
+            byte += 32
+        out.append(UInt8(byte))
+    return String(unsafe_from_utf8=out^)
+
+
+def _validate_metadata_key(key: String) raises:
+    """Validate a *lower-cased* metadata key against the gRPC-over-HTTP/2
+    spec. Order matters: the more specific failure modes (pseudo-headers,
+    reserved prefixes, transport-managed names) report first so the caller
+    gets a useful error rather than a generic "illegal character" hit.
+    """
     var key_bytes = key.as_bytes()
     if len(key_bytes) == 0:
         raise Error("metadata key must not be empty")
+
+    # 1. HTTP/2 pseudo-headers (`:method`, `:scheme`, `:path`, `:authority`).
     if key_bytes[0] == ord(":"):
         raise Error(
-            "metadata key '"
-            + key
-            + "' starts with ':' (HTTP/2 pseudo-header)"
+            "metadata key '" + key + "' is an HTTP/2 pseudo-header"
         )
+
+    # 2. The `grpc-` prefix is reserved by the gRPC protocol itself.
     if key.startswith("grpc-"):
         raise Error(
             "metadata key '"
             + key
             + "' uses the reserved 'grpc-' prefix"
         )
+
+    # 3. Binary metadata (`-bin` suffix) needs Bytes-typed values, which the
+    # current `Dict[String, String]` parameter shape can't carry. Explicit
+    # error rather than silent truncation.
     if key.endswith("-bin"):
         raise Error(
             "metadata key '"
             + key
             + "' is binary (-bin); binary metadata is not supported yet"
         )
+
+    # 4. Names mo_grpc / HTTP itself owns. Setting these via custom metadata
+    # would either contradict the transport (`content-type`) or break HTTP/2
+    # framing (`connection`, `transfer-encoding`).
     if (
         key == "content-type"
         or key == "te"
@@ -86,18 +109,9 @@ def _is_reserved_metadata_key(key: String) raises:
     ):
         raise Error("metadata key '" + key + "' is managed by mo_grpc")
 
-
-def _normalize_metadata_key(key: String) raises -> String:
-    """Lowercase `key` and reject any character outside the gRPC charset
-    `[0-9a-z_.-]` (per the grpc-over-http2 spec)."""
-    var key_bytes = key.as_bytes()
-    var out = Bytes()
-    out.reserve(len(key_bytes))
+    # 5. Charset: gRPC-over-HTTP/2 mandates `[0-9a-z_.-]+`.
     for i in range(len(key_bytes)):
         var byte = Int(key_bytes[i])
-        # ASCII upper-case → lower-case.
-        if byte >= ord("A") and byte <= ord("Z"):
-            byte += 32
         var is_lower_alpha = byte >= ord("a") and byte <= ord("z")
         var is_digit = byte >= ord("0") and byte <= ord("9")
         var is_punct = (
@@ -110,8 +124,6 @@ def _normalize_metadata_key(key: String) raises -> String:
                 + "' contains illegal character at position "
                 + String(i)
             )
-        out.append(UInt8(byte))
-    return String(unsafe_from_utf8=out^)
 
 
 def _validate_metadata_value(key: String, value: String) raises:
@@ -158,8 +170,8 @@ def grpc_headers(
         entries[String("grpc-timeout")] = String(timeout_ms) + String("m")
 
     for entry in metadata.items():
-        var normalized_key = _normalize_metadata_key(entry.key)
-        _is_reserved_metadata_key(normalized_key)
+        var normalized_key = _ascii_lower(entry.key)
+        _validate_metadata_key(normalized_key)
         _validate_metadata_value(normalized_key, entry.value)
         entries[normalized_key] = entry.value
 
