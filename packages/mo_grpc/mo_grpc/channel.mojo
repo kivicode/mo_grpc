@@ -69,6 +69,7 @@ struct GrpcChannel(Movable):
         method: String,
         request: Req,
         timeout_ms: Int = 0,
+        metadata: Dict[String, String] = Dict[String, String](),
     ) raises -> Resp:
         """Send a single request, receive a single response over HTTP/2 + TLS.
 
@@ -77,6 +78,12 @@ struct GrpcChannel(Movable):
         sends the canonical `grpc-timeout: <n>m` request header so the server
         can shed the request itself. On expiry the call raises a typed
         `GrpcError(DEADLINE_EXCEEDED)`.
+
+        `metadata` is application-supplied custom request metadata
+        (`authorization`, `x-tenant`, `x-request-id`, …). Keys are validated
+        and lowercased per the gRPC-over-HTTP/2 spec; reserved keys
+        (`grpc-*`, `:*`, `content-type`, `te`, `user-agent`, …) raise before
+        the call hits the wire. Binary (`-bin`) metadata is not supported yet.
         """
 
         # Serialize directly into a buffer that already has a reserved 5-byte
@@ -95,10 +102,8 @@ struct GrpcChannel(Movable):
         header_ptr[3] = UInt8((request_body_len >> 8) & 0xFF)
         header_ptr[4] = UInt8(request_body_len & 0xFF)
 
-        # Send and capture the response. `headers` must be freed on every
-        # path — Mojo's drop-check would otherwise refuse to compile this.
         var url = self.base_url + method
-        var headers = grpc_headers(timeout_ms=timeout_ms)
+        var headers = grpc_headers(timeout_ms=timeout_ms, metadata=metadata)
         var framed_response = Bytes()
         var transport_err = String("")
         try:
