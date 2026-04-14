@@ -1,0 +1,8 @@
+# Binaries
+bench_mojo
+bench_heavy_mojo
+
+certs/server.crt
+certs/server.key
+gen/
+*.log

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package bench;
+
+service Echo {
+  rpc Ping (PingRequest) returns (PingReply);
+}
+
+message PingRequest {
+  optional int32 seq = 1;
+  bytes payload = 2;
+}
+
+message PingReply {
+  optional int32 seq = 1;
+  bytes payload = 2;
+}
