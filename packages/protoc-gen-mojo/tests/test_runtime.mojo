@@ -306,17 +306,16 @@ def test_repeated_packed() raises:
     var packed_data = packed.flush()
 
     var w = ProtoWriter()
-    w.write_tag(1, WireType.LEN_DELIM)
-    w.write_varint(UInt64(len(packed_data)))
-    w._write(packed_data^)
+    w.write_bytes(1, packed_data)
 
     var r = roundtrip(w)
     var fld, wt = r.read_tag()
     assert_equal(wt.value, UInt8(2))
-    var sub = r.read_message()
+    var saved_end = r.push_limit()
     var values = List[Int32]()
-    while sub.has_more():
-        values.append(sub.read_int32())
+    while r.has_more():
+        values.append(r.read_int32())
+    r.pop_limit(saved_end)
     assert_equal(len(values), 3)
     assert_equal(values[0], Int32(10))
     assert_equal(values[1], Int32(20))

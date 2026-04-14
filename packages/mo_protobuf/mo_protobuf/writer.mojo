@@ -155,10 +155,6 @@ struct ProtoWriter:
         dst[3] = UInt8(((body_len >> 21) & 0x7F) | 0x80)
         dst[4] = UInt8((body_len >> 28) & 0x7F)
 
-    @always_inline
-    def _ptr(self) -> UnsafePointer[UInt8, MutAnyOrigin]:
-        return UnsafePointer[UInt8, MutAnyOrigin](unsafe_from_address=self.ptr_addr)
-
     def _append_byte(mut self, value: UInt8):
         self.buf.append(value)
 
