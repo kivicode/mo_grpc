@@ -32,7 +32,8 @@ struct GrpcChannel(Movable):
         """Send a single request, receive a single response over HTTP/2 + TLS."""
         var w = ProtoWriter()
         request.serialize(w)
-        var framed_req = encode_grpc_frame(w.flush())
+        var body = w.flush()
+        var framed_req = encode_grpc_frame(body^)
 
         var url = self.base_url + method
         var headers = grpc_headers()
@@ -46,7 +47,7 @@ struct GrpcChannel(Movable):
         if len(err) > 0:
             raise Error(err)
 
-        var split = decode_grpc_frame(framed_resp)
+        var split = decode_grpc_frame(framed_resp^)
         var r = ProtoReader(split.body^)
         return Resp.parse(r)
 

@@ -7,21 +7,23 @@ Each gRPC DATA frame is:
     bytes 5..:  serialized protobuf message (body)
 """
 
+from std.memory import memcpy
 from mo_protobuf.common import Bytes
 
 
-def encode_grpc_frame(body: Bytes) -> Bytes:
-    """Prepend a 5-byte gRPC header to `body`."""
+def encode_grpc_frame(var body: Bytes) -> Bytes:
+    """Prepend a 5-byte gRPC header to `body`. Consumes `body`."""
     var n = UInt32(len(body))
+    var body_len = len(body)
     var out = Bytes()
-    out.reserve(5 + len(body))
-    out.append(UInt8(0))  # compression flag = none
-    out.append(UInt8((n >> 24) & 0xFF))
-    out.append(UInt8((n >> 16) & 0xFF))
-    out.append(UInt8((n >> 8) & 0xFF))
-    out.append(UInt8(n & 0xFF))
-    for i in range(len(body)):
-        out.append(body[i])
+    out.resize(5 + body_len, UInt8(0))
+    var dst = out.unsafe_ptr()
+    dst[0] = UInt8(0)
+    dst[1] = UInt8((n >> 24) & 0xFF)
+    dst[2] = UInt8((n >> 16) & 0xFF)
+    dst[3] = UInt8((n >> 8) & 0xFF)
+    dst[4] = UInt8(n & 0xFF)
+    memcpy(dest=dst + 5, src=body.unsafe_ptr(), count=body_len)
     return out^
 
 
@@ -33,8 +35,8 @@ struct FrameSplit:
     var remainder: Bytes
 
 
-def decode_grpc_frame(data: Bytes) raises -> FrameSplit:
-    """Decode one gRPC frame from the front of `data`.
+def decode_grpc_frame(var data: Bytes) raises -> FrameSplit:
+    """Decode one gRPC frame from the front of `data`. Consumes `data`.
 
     Raises if `data` is shorter than the advertised frame length.
     Returns the body + any bytes that came after this frame.
@@ -52,13 +54,15 @@ def decode_grpc_frame(data: Bytes) raises -> FrameSplit:
             + String(len(data) - 5)
         )
 
+    var body_len = Int(length)
     var body = Bytes()
-    body.reserve(Int(length))
-    for i in range(5, end):
-        body.append(data[i])
+    body.resize(body_len, UInt8(0))
+    memcpy(dest=body.unsafe_ptr(), src=data.unsafe_ptr() + 5, count=body_len)
 
     var remainder = Bytes()
-    for i in range(end, len(data)):
-        remainder.append(data[i])
+    var rem_len = len(data) - end
+    if rem_len > 0:
+        remainder.resize(rem_len, UInt8(0))
+        memcpy(dest=remainder.unsafe_ptr(), src=data.unsafe_ptr() + end, count=rem_len)
 
     return FrameSplit(body^, remainder^)

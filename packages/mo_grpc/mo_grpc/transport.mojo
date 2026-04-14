@@ -3,7 +3,7 @@ HTTP/2 + TLS transport for gRPC
 """
 
 from std.ffi import c_char, c_size_t
-from memory import UnsafePointer
+from std.memory import UnsafePointer, memcpy
 from mojo_curl import Easy, CurlList
 from mojo_curl.c.types import (
     MutExternalOpaquePointer,
@@ -15,18 +15,22 @@ from mo_protobuf.common import Bytes
 
 # libcurl calls this for each chunk of response data. `userdata` is a pointer to
 # the response buffer (a Bytes == List[UInt8]), passed via CURLOPT_WRITEDATA.
+# Bulk-copies via memcpy — the previous per-byte append loop dominated unary
+# RPC time on payloads larger than a few KB.
 def _write_cb(
     ptr: MutExternalPointer[c_char],
     size: c_size_t,
     nmemb: c_size_t,
     userdata: MutExternalOpaquePointer,
 ) -> c_size_t:
-    var n = size * nmemb
+    var n = Int(size * nmemb)
     var buf = userdata.bitcast[Bytes]()
-    buf[].reserve(len(buf[]) + Int(n))
-    for i in range(Int(n)):
-        buf[].append(UInt8(Int(ptr[i])))
-    return n
+    var start = len(buf[])
+    buf[].resize(start + n, UInt8(0))
+    var dst = buf[].unsafe_ptr() + start
+    var src = ptr.bitcast[UInt8]()
+    memcpy(dest=dst, src=src, count=n)
+    return size * nmemb
 
 
 # HTTP_VERSION enum values (from curl.h CURL_HTTP_VERSION_*)
