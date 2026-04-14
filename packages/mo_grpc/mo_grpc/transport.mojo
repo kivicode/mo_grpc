@@ -38,30 +38,40 @@ alias HTTP_VERSION_2TLS = 4  # upgrade to HTTP/2 over TLS, fall back to 1.1
 alias HTTP_VERSION_2_PRIOR = 5  # cleartext HTTP/2 without upgrade
 
 
-def http_post(url: String, body: Bytes, content_type: String = "application/grpc") raises -> Bytes:
-    """POST `body` to `url` over HTTP/2 and return the response bytes.
+def grpc_headers(content_type: String = "application/grpc") raises -> CurlList:
+    return CurlList(
+        {
+            "Content-Type": content_type,
+            "TE": "trailers",
+            "User-Agent": "grpc-mojo/0.1",
+        }
+    )
 
-    TLS is automatic for `https://` URLs. The gRPC content-type and trailer
-    header are set by default.
+
+def perform_post(mut easy: Easy, mut headers: CurlList, url: String, body: Bytes) raises -> Bytes:
+    """Run a single POST on a borrowed Easy handle.
+
+    Caller owns `headers` and is responsible for freeing it.
     """
     var response = Bytes()
-    var easy = Easy()
-
     var r: Result
+
     r = easy.url(url)
     if r != Result.OK:
         raise Error("curl.url: " + easy.describe_error(r))
 
-    r = easy.post_fields(body)
-    if r != Result.OK:
-        raise Error("curl.post_fields: " + easy.describe_error(r))
-
-    # CURLOPT_POSTFIELDS resets POSTFIELDSIZE to -1 (i.e. strlen()), so it must
-    # be re-asserted after post_fields(), otherwise binary bodies that begin
-    # with a null byte (gRPC frames, for example) get sent as zero bytes.
+    # POSTFIELDSIZE must be set before COPYPOSTFIELDS so libcurl knows how
+    # many bytes to copy. (For plain CURLOPT_POSTFIELDS the size also has to be
+    # set after, POSTFIELDS resets POSTFIELDSIZE to -1, falling back to
+    # strlen(), which truncates any binary body that begins with a null byte
+    # such as a gRPC frame.)
     r = easy.post_field_size(len(body))
     if r != Result.OK:
         raise Error("curl.post_field_size: " + easy.describe_error(r))
+
+    r = easy.post_fields_copy(body)
+    if r != Result.OK:
+        raise Error("curl.post_fields: " + easy.describe_error(r))
 
     r = easy.http_version(HTTP_VERSION_2TLS)
     if r != Result.OK:
@@ -75,21 +85,27 @@ def http_post(url: String, body: Bytes, content_type: String = "application/grpc
     if r != Result.OK:
         raise Error("curl.write_data: " + easy.describe_error(r))
 
-    var headers = CurlList(
-        {
-            "Content-Type": content_type,
-            "TE": "trailers",
-            "User-Agent": "grpc-mojo/0.1",
-        }
-    )
     r = easy.http_headers(headers)
     if r != Result.OK:
-        headers^.free()
         raise Error("curl.http_headers: " + easy.describe_error(r))
 
     r = easy.perform()
-    headers^.free()
     if r != Result.OK:
         raise Error("curl.perform: " + easy.describe_error(r))
 
     return response^
+
+
+def http_post(url: String, body: Bytes, content_type: String = "application/grpc") raises -> Bytes:
+    """One-shot POST: builds a fresh Easy handle and discards it. Prefer
+    `GrpcChannel`, which keeps a long-lived Easy and reuses the connection.
+    """
+    var easy = Easy()
+    var headers = grpc_headers(content_type)
+    try:
+        var resp = perform_post(easy, headers, url, body)
+        headers^.free()
+        return resp^
+    except e:
+        headers^.free()
+        raise e

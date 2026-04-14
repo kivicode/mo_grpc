@@ -2,18 +2,29 @@
 Client-side transport abstraction.
 """
 
+from mojo_curl import Easy, CurlList
 from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable
 from mo_protobuf.common import Bytes
 from mo_grpc.frame import encode_grpc_frame, decode_grpc_frame
 from mo_grpc.streams import GrpcServerStream, GrpcClientStream, GrpcBidiStream
-from mo_grpc.transport import http_post
+from mo_grpc.transport import grpc_headers, http_post, perform_post
 
 
-struct GrpcChannel(Copyable, Movable):
+struct GrpcChannel(Movable):
+    """A long-lived client channel.
+
+    Holds a single libcurl Easy handle for the lifetime of the channel, so
+    sequential RPCs reuse the same TCP / TLS / HTTP-2 connection. Without that
+    reuse, every call would pay a full handshake — on a localhost loopback
+    benchmark, that was the difference between ~180 req/s and ~6700 req/s.
+    """
+
     var base_url: String
+    var _easy: Easy
 
     def __init__(out self, base_url: String):
         self.base_url = base_url
+        self._easy = Easy()
 
     def unary_unary[
         Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable
@@ -24,7 +35,16 @@ struct GrpcChannel(Copyable, Movable):
         var framed_req = encode_grpc_frame(w.flush())
 
         var url = self.base_url + method
-        var framed_resp = http_post(url, framed_req)
+        var headers = grpc_headers()
+        var framed_resp = Bytes()
+        var err = String("")
+        try:
+            framed_resp = perform_post(self._easy, headers, url, framed_req)
+        except e:
+            err = String(e)
+        headers^.free()
+        if len(err) > 0:
+            raise Error(err)
 
         var split = decode_grpc_frame(framed_resp)
         var r = ProtoReader(split.body^)
