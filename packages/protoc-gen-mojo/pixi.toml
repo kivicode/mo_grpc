@@ -23,7 +23,7 @@ backend = { name = "pixi-build-mojo", version = "*" }
 
 [package.build.config]
 bins = [
-    { name = "protoc_gen_mojo", path = "main.mojo", extra-args = ["-I", "$PREFIX/lib/mojo"] },
+    { name = "protoc_gen_mojo", extra-args = ["-I", "$PREFIX/lib/mojo"] },
 ]
 
 [dependencies]
