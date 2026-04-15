@@ -209,7 +209,7 @@ def generate_prelude(deps: List[String], module_prefix: String = "", has_service
         "   AUTO-GENERATED CODE\n"
         "   !!! DO NOT EDIT !!!\n"
         '"""\n\n'
-        "from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable\n"
+        "from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable, Box\n"
         "from mo_protobuf.common import FieldNumber, WireType\n"
     )
     for dep in deps:
@@ -321,6 +321,7 @@ def generate_message(
     mut renamings: Renamings,
     scalar_types: Dict[Int, String],
     read_fns: Dict[Int, String],
+    reach: Dict[String, Dict[String, Int]],
     indent: Int = 0,
     prefix: String = "",
 ) raises -> List[String]:
@@ -388,7 +389,7 @@ def generate_message(
     for inner in desc.nested_type:
         var is_map_entry = inner.options and inner.options.value().map_entry and inner.options.value().map_entry.value()
         if not is_map_entry:
-            for p in generate_message(inner, renamings, scalar_types, read_fns, indent, prefix + name):
+            for p in generate_message(inner, renamings, scalar_types, read_fns, reach, indent, prefix + name):
                 parts.append(p)
     for inner in desc.enum_type:
         parts.append(generate_enum(inner, indent))
@@ -415,10 +416,17 @@ def generate_message(
                     seen_oneof_indices.append(oi)
                     var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
                     var union_type = full + capitalize_first(oname)
-                    out += ts(t"    var {oname}: Optional[{union_type}]\n")
+                    # Box the oneof union instead of using Optional to heap-indirect
+                    # the cycle through TypeProto/TypeProtoValue-style graphs. Using
+                    # Optional here hangs the mojo compiler during Copyable synthesis
+                    # in certain recursive configurations (see upstream bug).
+                    out += ts(t"    var {oname}: Box[{union_type}]\n")
             elif me:
                 var e = me.value()
                 out += ts(t"    var {fname}: Dict[{e.key_mojo_type}, {e.val_mojo_type}]\n")
+            elif field_is_boxed(f, full, renamings, reach):
+                var base = field_base_type(f, renamings, scalar_types)
+                out += ts(t"    var {fname}: Box[{base}]\n")
             else:
                 var ftype = field_full_type(f, renamings, scalar_types)
                 out += ts(t"    var {fname}: {ftype}\n")
@@ -442,13 +450,17 @@ def generate_message(
                 if not already:
                     seen_oneof_init.append(oi)
                     var oname = desc.oneof_decl[oi].name.value() if desc.oneof_decl[oi].name else "oneof" + String(oi)
-                    out += ts(t"        self.{oname} = None\n")
+                    var union_type = full + capitalize_first(oname)
+                    out += ts(t"        self.{oname} = Box[{union_type}]()\n")
             elif me:
                 var e = me.value()
                 out += ts(t"        self.{fname} = Dict[{e.key_mojo_type}, {e.val_mojo_type}]()\n")
             elif is_rep:
                 var base = field_base_type(f, renamings, scalar_types)
                 out += ts(t"        self.{fname} = List[{base}]()\n")
+            elif field_is_boxed(f, full, renamings, reach):
+                var base = field_base_type(f, renamings, scalar_types)
+                out += ts(t"        self.{fname} = Box[{base}]()\n")
             elif is_opt:
                 out += ts(t"        self.{fname} = None\n")
             else:  # required
@@ -499,13 +511,13 @@ def generate_message(
             var utype = full + capitalize_first(oname)
             if f.type and f.type.value() == Type.TYPE_MESSAGE:
                 out += "                var saved_end = reader.push_limit()\n"
-                out += ts(t"                instance.{oname} = {utype}.{fname}({base}.parse(reader))\n")
+                out += ts(t"                instance.{oname} = Box[{utype}]({utype}.{fname}({base}.parse(reader)))\n")
                 out += "                reader.pop_limit(saved_end)\n"
             elif f.type and f.type.value() == Type.TYPE_ENUM:
-                out += ts(t"                instance.{oname} = {utype}.{fname}({base}(Int(reader.read_enum())))\n")
+                out += ts(t"                instance.{oname} = Box[{utype}]({utype}.{fname}({base}(Int(reader.read_enum()))))\n")
             else:
                 var rdfn = read_fns.get(f.type.value()._value if f.type else 0, "Unknown")
-                out += ts(t"                instance.{oname} = {utype}.{fname}(reader.read_{rdfn}())\n")
+                out += ts(t"                instance.{oname} = Box[{utype}]({utype}.{fname}(reader.read_{rdfn}()))\n")
             continue
         var is_rep = f.label and f.label.value() == Label.LABEL_REPEATED
         var me_parse = get_map_entry(map_entries, f, full)
@@ -551,6 +563,8 @@ def generate_message(
             out += "                var saved_end = reader.push_limit()\n"
             if is_rep:
                 out += ts(t"                instance.{fname}.append({base}.parse(reader))\n")
+            elif field_is_boxed(f, full, renamings, reach):
+                out += ts(t"                instance.{fname} = Box[{base}]({base}.parse(reader))\n")
             else:
                 out += ts(t"                instance.{fname} = {base}.parse(reader)\n")
             out += "                reader.pop_limit(saved_end)\n"
@@ -667,11 +681,14 @@ def generate_message(
                     out += "            writer.end_message(len_slot)\n"
                 else:  # required message
                     out += ts(t"        var len_slot = writer.begin_message({num})\n")
+                    var req_access = ts(t"self.{fname}")
+                    if field_is_boxed(f, full, renamings, reach):
+                        req_access = ts(t"self.{fname}.value()")
                     if is_self_ref:
                         out += "        var ser = Self.serialize\n"
-                        out += ts(t"        ser(self.{fname}, writer)\n")
+                        out += ts(t"        ser({req_access}, writer)\n")
                     else:
-                        out += ts(t"        self.{fname}.serialize(writer)\n")
+                        out += ts(t"        {req_access}.serialize(writer)\n")
                     out += "        writer.end_message(len_slot)\n"
             elif f.type and f.type.value() == Type.TYPE_ENUM:
                 if is_rep:
@@ -747,6 +764,96 @@ def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
     return out
 
 
+# ── cycle detection ────────────────────────────────────────────────────────────
+# To satisfy Mojo's layout checker, recursive message references must be
+# heap-indirected. We build a graph of "layout-forcing" edges (non-repeated
+# message fields) and flag any edge whose endpoints sit on a cycle, so the
+# codegen can emit `Box[T]` instead of `Optional[T]` / bare `T`.
+
+
+def _is_map_entry_desc(inner: DescriptorProto) -> Bool:
+    return Bool(inner.options) and Bool(inner.options.value().map_entry) and inner.options.value().map_entry.value()
+
+
+def collect_message_names(
+    desc: DescriptorProto,
+    prefix: String,
+    mut renamings: Renamings,
+) raises:
+    var name = desc.name.value() if desc.name else "Unknown"
+    renamings[name] = prefix + name
+    for inner in desc.nested_type:
+        if not _is_map_entry_desc(inner):
+            collect_message_names(inner, prefix + name, renamings)
+
+
+def collect_message_edges(
+    desc: DescriptorProto,
+    prefix: String,
+    renamings: Renamings,
+    mut adj: Dict[String, List[String]],
+) raises:
+    var name = desc.name.value() if desc.name else "Unknown"
+    var full = prefix + name
+    var edges = List[String]()
+    for f in desc.field:
+        if f.label and f.label.value() == Label.LABEL_REPEATED:
+            continue
+        if not (f.type and f.type.value() == Type.TYPE_MESSAGE):
+            continue
+        if not f.type_name:
+            continue
+        var target_last = last_component(f.type_name.value())
+        var target_full = renamings.get(target_last, target_last)
+        edges.append(target_full)
+    adj[full] = edges^
+    for inner in desc.nested_type:
+        if not _is_map_entry_desc(inner):
+            collect_message_edges(inner, prefix + name, renamings, adj)
+
+
+def compute_reachability(
+    adj: Dict[String, List[String]],
+) raises -> Dict[String, Dict[String, Int]]:
+    """For each node, the set of nodes reachable from it (including itself)."""
+    var result = Dict[String, Dict[String, Int]]()
+    for entry in adj.items():
+        var src = entry.key
+        var reached = Dict[String, Int]()
+        var stack = List[String]()
+        stack.append(src)
+        while len(stack) > 0:
+            var cur = stack.pop()
+            if cur in reached:
+                continue
+            reached[cur] = 1
+            if cur in adj:
+                for nxt in adj[cur]:
+                    stack.append(nxt)
+        result[src] = reached^
+    return result^
+
+
+def field_is_boxed(
+    f: FieldDescriptorProto,
+    owner_full: String,
+    renamings: Renamings,
+    reach: Dict[String, Dict[String, Int]],
+) raises -> Bool:
+    """Edge owner -> target is boxed iff the target can reach back to the owner."""
+    if f.label and f.label.value() == Label.LABEL_REPEATED:
+        return False
+    if not (f.type and f.type.value() == Type.TYPE_MESSAGE):
+        return False
+    if not f.type_name:
+        return False
+    var target_last = last_component(f.type_name.value())
+    var target_full = renamings.get(target_last, target_last)
+    if target_full not in reach:
+        return False
+    return owner_full in reach[target_full]
+
+
 def generate_file(proto_file: FileDescriptorProto, module_prefix: String = "") raises -> String:
     var renamings = Renamings()
     var scalar_types = make_scalar_types()
@@ -760,8 +867,18 @@ def generate_file(proto_file: FileDescriptorProto, module_prefix: String = "") r
     chunks.append(generate_prelude(deps, module_prefix, has_services))
     for e in proto_file.enum_type:
         chunks.append(generate_enum(e, 0))
+
+    # Pre-pass: build message graph (within this file) and compute reachability
+    # so generate_message can box fields whose edges sit on a cycle.
+    var adj = Dict[String, List[String]]()
     for m in proto_file.message_type:
-        for p in generate_message(m, renamings, scalar_types, read_fns, 0, ""):
+        collect_message_names(m, "", renamings)
+    for m in proto_file.message_type:
+        collect_message_edges(m, "", renamings, adj)
+    var reach = compute_reachability(adj)
+
+    for m in proto_file.message_type:
+        for p in generate_message(m, renamings, scalar_types, read_fns, reach, 0, ""):
             chunks.append(p)
     var pkg = proto_file.package.value() if proto_file.package else ""
     for svc in proto_file.service:
