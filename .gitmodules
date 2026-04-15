@@ -1,0 +1,3 @@
+[submodule "vendor/mojo-curl"]
+	path = vendor/mojo-curl
+	url = https://github.com/thatstoasty/mojo-curl.git

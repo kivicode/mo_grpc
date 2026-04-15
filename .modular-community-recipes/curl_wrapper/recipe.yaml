@@ -1,0 +1,84 @@
+context:
+  version: "0.1.0"
+  # Pinned to the same upstream SHA the workspace submodule uses
+  # (vendor/mojo-curl). Bump in lockstep with the submodule.
+  source_rev: "208375ad90f61975e474ed4e9f985a5ddf6c2fa1"
+
+package:
+  name: "curl_wrapper"
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/thatstoasty/mojo-curl.git
+    rev: ${{ source_rev }}
+
+build:
+  number: 0
+  script:
+    # 1. Build the libcurl C shim into a shared library and install it into
+    #    $PREFIX/lib. mojo-curl's raw FFI bindings dlopen this at runtime
+    #    alongside libcurl proper.
+    - cmake -S shim -B _build_shim
+        -DCMAKE_INSTALL_PREFIX=${{ PREFIX }}
+        -DCMAKE_BUILD_TYPE=Release
+    - cmake --build _build_shim --target install
+
+    # 2. Drop activate / deactivate scripts so mojo-curl's runtime path
+    #    lookup (LIBCURL_LIB_PATH / CURL_WRAPPER_LIB_PATH env vars) resolves
+    #    to $CONDA_PREFIX/lib instead of mojo-curl's hard-coded
+    #    `.pixi/envs/default/lib/...` fallback.
+    - mkdir -p ${{ PREFIX }}/etc/conda/activate.d ${{ PREFIX }}/etc/conda/deactivate.d
+    - if: unix
+      then:
+        - |
+          cat > ${{ PREFIX }}/etc/conda/activate.d/curl_wrapper.sh <<'EOF'
+          #!/bin/sh
+          if [ "$(uname)" = "Darwin" ]; then
+              _curl_wrapper_libext="dylib"
+          else
+              _curl_wrapper_libext="so"
+          fi
+          export CURL_WRAPPER_LIBCURL_LIB_PATH_BACKUP="${LIBCURL_LIB_PATH:-}"
+          export CURL_WRAPPER_CURL_WRAPPER_LIB_PATH_BACKUP="${CURL_WRAPPER_LIB_PATH:-}"
+          export LIBCURL_LIB_PATH="${CONDA_PREFIX}/lib/libcurl.${_curl_wrapper_libext}"
+          export CURL_WRAPPER_LIB_PATH="${CONDA_PREFIX}/lib/libcurl_wrapper.${_curl_wrapper_libext}"
+          unset _curl_wrapper_libext
+          EOF
+        - |
+          cat > ${{ PREFIX }}/etc/conda/deactivate.d/curl_wrapper.sh <<'EOF'
+          #!/bin/sh
+          if [ -n "${CURL_WRAPPER_LIBCURL_LIB_PATH_BACKUP:-}" ]; then
+              export LIBCURL_LIB_PATH="${CURL_WRAPPER_LIBCURL_LIB_PATH_BACKUP}"
+          else
+              unset LIBCURL_LIB_PATH
+          fi
+          unset CURL_WRAPPER_LIBCURL_LIB_PATH_BACKUP
+          if [ -n "${CURL_WRAPPER_CURL_WRAPPER_LIB_PATH_BACKUP:-}" ]; then
+              export CURL_WRAPPER_LIB_PATH="${CURL_WRAPPER_CURL_WRAPPER_LIB_PATH_BACKUP}"
+          else
+              unset CURL_WRAPPER_LIB_PATH
+          fi
+          unset CURL_WRAPPER_CURL_WRAPPER_LIB_PATH_BACKUP
+          EOF
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - cmake
+    - make
+  host:
+    - libcurl >=8.17.0,<9.0.0
+  run:
+    - libcurl >=8.17.0,<9.0.0
+
+about:
+  homepage: https://github.com/thatstoasty/mojo-curl
+  license: MIT
+  license_file: LICENSE
+  summary: C shim around libcurl that mojo-curl's FFI bindings dlopen at runtime. Built from the `shim/` subdirectory of thatstoasty/mojo-curl.
+  repository: https://github.com/thatstoasty/mojo-curl
+
+extra:
+  maintainers:
+    - kivicode
+  project_name: curl_wrapper

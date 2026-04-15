@@ -1,0 +1,40 @@
+context:
+  version: "0.1.0"
+  mojo_version: ">=0.26.2.0,<0.26.3.0"
+
+package:
+  name: "protoc-gen-mojo"
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/kivicode/mo_grpc.git
+    rev: 53a2625125fd85a695d1a9b29a7f8e28d9e698aa
+
+build:
+  number: 0
+  script:
+    # Build the plugin as a real executable so protoc can exec it.
+    - mojo build -I packages/protoc-gen-mojo packages/protoc-gen-mojo/main.mojo -o ${{ PREFIX }}/bin/protoc-gen-mojo
+
+requirements:
+  build:
+    - mojo-compiler ${{ mojo_version }}
+    - mo_protobuf =0.1.0
+  host:
+    - mojo-compiler ${{ mojo_version }}
+    - mo_protobuf =0.1.0
+  run:
+    - mojo-compiler ${{ mojo_version }}
+    - ${{ pin_compatible('mo_protobuf') }}
+
+about:
+  homepage: https://github.com/kivicode/mo_grpc
+  license: MIT
+  license_file: LICENSE
+  summary: protoc plugin that generates Mojo structs, oneof-union structs, and gRPC stubs from .proto files.
+  repository: https://github.com/kivicode/mo_grpc
+
+extra:
+  maintainers:
+    - kivicode
+  project_name: protoc-gen-mojo

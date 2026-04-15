@@ -1,0 +1,45 @@
+context:
+  version: "0.1.0"
+  mojo_version: ">=0.26.2.0,<0.26.3.0"
+
+package:
+  name: "mo_grpc"
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/kivicode/mo_grpc.git
+    rev: 53a2625125fd85a695d1a9b29a7f8e28d9e698aa
+
+build:
+  number: 0
+  script:
+    - mojo package packages/mo_grpc/mo_grpc -o ${{ PREFIX }}/lib/mojo/mo_grpc.mojopkg
+
+requirements:
+  build:
+    - mojo-compiler ${{ mojo_version }}
+    - mo_protobuf =0.1.0
+    - mojo-curl
+    - curl_wrapper
+  host:
+    - mojo-compiler ${{ mojo_version }}
+    - mo_protobuf =0.1.0
+    - mojo-curl
+    - curl_wrapper
+  run:
+    - mojo-compiler ${{ mojo_version }}
+    - ${{ pin_compatible('mo_protobuf') }}
+    - mojo-curl
+    - curl_wrapper
+
+about:
+  homepage: https://github.com/kivicode/mo_grpc
+  license: MIT
+  license_file: LICENSE
+  summary: Mojo gRPC client + runtime - 5-byte frame codec, GrpcChannel with HTTP/2 + TLS over libcurl.
+  repository: https://github.com/kivicode/mo_grpc
+
+extra:
+  maintainers:
+    - kivicode
+  project_name: mo_grpc
