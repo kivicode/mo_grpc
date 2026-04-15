@@ -21,6 +21,11 @@ version = "0.1.0"
 [package.build]
 backend = { name = "pixi-build-mojo", version = "*" }
 
+[package.build.config]
+bins = [
+    { name = "protoc_gen_mojo", path = "main.mojo", extra-args = ["-I", "$PREFIX/lib/mojo"] },
+]
+
 [dependencies]
 mojo = ">=0.26.2.0,<0.26.3.0"
 mo_protobuf = { path = "../mo_protobuf" }
