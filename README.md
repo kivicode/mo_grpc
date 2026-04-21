@@ -2,7 +2,7 @@
 <br />
 
 <div align="center">
-    <img src="assets/image.png" alt="Logo" width="250" height="250">
+    <img src="assets/image.png" alt="Logo" width="300" height="300">
 
   <h3 align="center">MoGRPC / MoProtobuf</h3>
 
