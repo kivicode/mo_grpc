@@ -1,6 +1,6 @@
 # MoGRPC / MoProtobuf
 
-![CodeQL](<[https://github.com/kivicode/mo_grpc/workflows/CodeQL/badge.svg](https://github.com/ossf/scorecard/workflows/CodeQL/badge.svg?branch=main)>)
+[![CodeQL](https://github.com/kivicode/mo_grpc/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/kivicode/mo_grpc/actions/workflows/github-code-scanning/codeql)
 
 Pure-Mojo implementation of protobuf and gRPC.
 
