@@ -1,8 +1,24 @@
-# MoGRPC / MoProtobuf
+<a name="readme-top"></a>
+<br />
 
+<div align="center">
+    <img src="assets/image.png" alt="Logo" width="250" height="250">
+
+  <h3 align="center">MoGRPC / MoProtobuf</h3>
+
+  <p align="center">
+    🔥 A pure-Mojo implementation of protobuf and gRPC 🔥
+    <br/>
+
+![Written in Mojo][language-shield]
+[![MIT License][license-shield]][license-url]
 [![CodeQL](https://github.com/kivicode/mo_grpc/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/kivicode/mo_grpc/actions/workflows/github-code-scanning/codeql)
 
-Pure-Mojo implementation of protobuf and gRPC.
+<br/>
+[![Contributors Welcome][contributors-shield]][contributors-url]
+
+  </p>
+</div>
 
 > ⚠️ **BETA.** This project is pre-1.0. APIs, generated-code layout, wire-format
 > edge cases, and the gRPC client surface are still changing.
@@ -145,3 +161,12 @@ For multi-file outputs rooted under an existing package, pass `--mojo_opt=module
 ```bash
 bash packages/protoc-gen-mojo/tests/run_tests.sh
 ```
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+
+[language-shield]: https://img.shields.io/badge/language-mojo-orange
+[license-shield]: https://img.shields.io/github/license/kivicode/mo_grpc?logo=github
+[license-url]: https://github.com/kivicode/mo_grpc/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/badge/contributors-welcome!-blue
+[contributors-url]: https://github.com/kivicode/mo_grpc#contributing
