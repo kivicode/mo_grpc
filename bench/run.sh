@@ -73,6 +73,8 @@ build_mojo "$HERE/bench_mojo.mojo"       "$HERE/bench_mojo"
 build_mojo "$HERE/bench_heavy_mojo.mojo" "$HERE/bench_heavy_mojo"
 build_mojo "$HERE/test_status.mojo"      "$HERE/test_status"
 build_mojo "$HERE/test_streaming.mojo"   "$HERE/test_streaming"
+build_mojo "$HERE/test_mojo_server.mojo" "$HERE/test_mojo_server"
+build_mojo "$HERE/test_mojo_server_client.mojo" "$HERE/test_mojo_server_client"
 build_mojo "$HERE/bench_streaming_mojo.mojo" "$HERE/bench_streaming_mojo"
 
 # -- 4. start the gRPC echo server ---------------------------------------------
@@ -115,6 +117,16 @@ BENCH_PORT="$PORT" "$HERE/test_status"
 echo
 cd "$REPO"
 BENCH_PORT="$PORT" "$HERE/test_streaming"
+
+# -- 5b. Mojo server tests (Mojo client → Mojo server) ------------------------
+step "starting Mojo echo server for server tests"
+MOJO_SERVER_PORT=50553 "$HERE/test_mojo_server" &
+MOJO_SERVER_PID=$!
+sleep 1
+cd "$REPO"
+MOJO_SERVER_PORT=50553 "$HERE/test_mojo_server_client"
+kill "$MOJO_SERVER_PID" 2>/dev/null || true
+wait "$MOJO_SERVER_PID" 2>/dev/null || true
 
 # -- 6. run all four benches ---------------------------------------------------
 echo

@@ -4,6 +4,8 @@ bench_heavy_mojo
 bench_streaming_mojo
 test_status
 test_streaming
+test_mojo_server
+test_mojo_server_client
 
 certs/server.crt
 certs/server.key
