@@ -11,6 +11,7 @@ comptime AF_INET: c_int = 2
 comptime SOCK_STREAM: c_int = 1
 comptime IPPROTO_TCP: c_int = 6
 comptime SOL_SOCKET: c_int = 0xFFFF
+comptime SO_REUSEADDR: c_int = 0x0004
 comptime SO_RCVTIMEO: c_int = 0x1006
 comptime SO_SNDTIMEO: c_int = 0x1005
 
@@ -275,6 +276,85 @@ struct TcpSocket(Movable):
         if self.fd != -1:
             _ = _close(self.fd)
             self.fd = -1
+
+
+# --- Server socket FFI ---
+
+fn _bind[origin: ImmutOrigin](
+    socket: c_int,
+    address: UnsafePointer[sockaddr_in, origin],
+    address_len: socklen_t,
+) -> c_int:
+    return external_call["bind", c_int, type_of(socket), type_of(address), type_of(address_len)](
+        socket, address, address_len
+    )
+
+
+fn _listen(socket: c_int, backlog: c_int) -> c_int:
+    return external_call["listen", c_int, type_of(socket), type_of(backlog)](socket, backlog)
+
+
+fn _accept[origin: MutOrigin](
+    socket: c_int,
+    address: UnsafePointer[sockaddr, origin],
+    address_len: UnsafePointer[socklen_t, origin],
+) -> c_int:
+    return external_call["accept", c_int, type_of(socket), type_of(address), type_of(address_len)](
+        socket, address, address_len
+    )
+
+
+struct ListenSocket:
+    """A TCP listening socket that accepts connections."""
+
+    var fd: c_int
+
+    fn __init__(out self, host: String, port: UInt16, backlog: Int = 128) raises:
+        self.fd = _socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        if self.fd == -1:
+            raise Error("socket() failed for listen")
+
+        # SO_REUSEADDR for quick rebind after restart
+        var one: c_int = 1
+        _ = _setsockopt(
+            self.fd, SOL_SOCKET, SO_REUSEADDR,
+            UnsafePointer(to=one).bitcast[c_void](),
+            socklen_t(size_of[c_int]()),
+        )
+
+        var addr = sockaddr_in(
+            sin_family=sa_family_t(AF_INET),
+            sin_port=htons(c_ushort(port)),
+            sin_addr=in_addr(s_addr=in_addr_t(0)),  # INADDR_ANY
+            sin_zero=StaticTuple[c_char, 8](),
+        )
+
+        var rc = _bind(self.fd, UnsafePointer(to=addr), socklen_t(size_of[sockaddr_in]()))
+        if rc != 0:
+            _ = _close(self.fd)
+            raise Error("bind() failed on port " + String(Int(port)))
+
+        rc = _listen(self.fd, c_int(backlog))
+        if rc != 0:
+            _ = _close(self.fd)
+            raise Error("listen() failed")
+
+    fn __del__(deinit self):
+        if self.fd != -1:
+            _ = _close(self.fd)
+
+    fn accept(self) raises -> TcpSocket:
+        """Accept one connection. Blocks until a client connects."""
+        var client_addr = sockaddr()
+        var addr_len = socklen_t(size_of[sockaddr]())
+        var client_fd = _accept(
+            self.fd,
+            UnsafePointer(to=client_addr),
+            UnsafePointer(to=addr_len),
+        )
+        if client_fd == -1:
+            raise Error("accept() failed")
+        return TcpSocket(client_fd)
 
 
 struct ParsedUrl:

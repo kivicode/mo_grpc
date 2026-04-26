@@ -13,6 +13,9 @@ from mo_grpc.net import TcpSocket, c_void
 comptime SSL_ERROR_WANT_READ: c_int = 2
 comptime SSL_ERROR_WANT_WRITE: c_int = 3
 comptime SSL_CTRL_SET_TLSEXT_HOSTNAME: c_int = 55
+comptime SSL_FILETYPE_PEM_VAL: c_int = 1
+comptime SSL_VERIFY_PEER_VAL: c_int = 1
+comptime SSL_VERIFY_FAIL_IF_NO_PEER_CERT: c_int = 2
 
 comptime SSL_CTX_ptr = UnsafePointer[c_void, MutExternalOrigin]
 comptime SSL_ptr = UnsafePointer[c_void, MutExternalOrigin]
@@ -95,6 +98,34 @@ struct SslLib(Movable):
     fn SSL_get_error(self, ssl: SSL_ptr, ret: c_int) -> c_int:
         return self.handle.get_function[fn (SSL_ptr, c_int) -> c_int]("SSL_get_error")(ssl, ret)
 
+    # --- Server TLS ---
+
+    fn TLS_server_method(self) -> SSL_METHOD_ptr:
+        return self.handle.get_function[fn () -> SSL_METHOD_ptr]("TLS_server_method")()
+
+    fn SSL_CTX_use_certificate_file(self, ctx: SSL_CTX_ptr, file: UnsafePointer[c_char, _], type: c_int) -> c_int:
+        return self.handle.get_function[fn (OpaquePtr, OpaquePtr, c_int) -> c_int]("SSL_CTX_use_certificate_file")(ctx, _to_opaque_from_char(file), type)
+
+    fn SSL_CTX_use_PrivateKey_file(self, ctx: SSL_CTX_ptr, file: UnsafePointer[c_char, _], type: c_int) -> c_int:
+        return self.handle.get_function[fn (OpaquePtr, OpaquePtr, c_int) -> c_int]("SSL_CTX_use_PrivateKey_file")(ctx, _to_opaque_from_char(file), type)
+
+    fn SSL_CTX_check_private_key(self, ctx: SSL_CTX_ptr) -> c_int:
+        return self.handle.get_function[fn (SSL_CTX_ptr) -> c_int]("SSL_CTX_check_private_key")(ctx)
+
+    fn SSL_accept(self, ssl: SSL_ptr) -> c_int:
+        return self.handle.get_function[fn (SSL_ptr) -> c_int]("SSL_accept")(ssl)
+
+    # --- mTLS ---
+
+    fn SSL_CTX_set_verify(self, ctx: SSL_CTX_ptr, mode: c_int):
+        self.handle.get_function[fn (SSL_CTX_ptr, c_int, OpaquePtr) -> NoneType]("SSL_CTX_set_verify")(ctx, mode, OpaquePtr())
+
+    fn SSL_CTX_load_verify_locations(self, ctx: SSL_CTX_ptr, ca_file: UnsafePointer[c_char, _]) -> c_int:
+        return self.handle.get_function[fn (OpaquePtr, OpaquePtr, OpaquePtr) -> c_int]("SSL_CTX_load_verify_locations")(ctx, _to_opaque_from_char(ca_file), OpaquePtr())
+
+    fn SSL_get_verify_result(self, ssl: SSL_ptr) -> c_int:
+        return self.handle.get_function[fn (SSL_ptr) -> c_int]("SSL_get_verify_result")(ssl)
+
 
 struct TlsSocket(Movable):
     """A TLS-wrapped TCP socket with ALPN h2 negotiation."""
@@ -136,6 +167,126 @@ struct TlsSocket(Movable):
             raise Error("SSL_connect failed: SSL_get_error=" + String(Int(err)))
 
     fn __moveinit__(out self: TlsSocket, deinit take: TlsSocket):
+        self._ssl_lib = take._ssl_lib^
+        self.tcp = take.tcp^
+        self.ctx = take.ctx
+        self.ssl = take.ssl
+
+    fn __del__(deinit self):
+        if self.ssl:
+            _ = self._ssl_lib.SSL_shutdown(self.ssl)
+            self._ssl_lib.SSL_free(self.ssl)
+        if self.ctx:
+            self._ssl_lib.SSL_CTX_free(self.ctx)
+
+    fn write(self, data: Span[UInt8, _]) raises:
+        var total = 0
+        var length = len(data)
+        while total < length:
+            var n = self._ssl_lib.SSL_write(
+                self.ssl,
+                (data.unsafe_ptr() + total).bitcast[c_void](),
+                c_int(length - total),
+            )
+            if n <= 0:
+                var err = self._ssl_lib.SSL_get_error(self.ssl, n)
+                raise Error("SSL_write failed: SSL_get_error=" + String(Int(err)))
+            total += Int(n)
+
+    fn read(self, buf: UnsafePointer[UInt8, _], max_len: Int) raises -> Int:
+        var n = self._ssl_lib.SSL_read(
+            self.ssl,
+            buf.bitcast[c_void](),
+            c_int(max_len),
+        )
+        if n <= 0:
+            var err = self._ssl_lib.SSL_get_error(self.ssl, n)
+            if err == SSL_ERROR_WANT_READ or err == SSL_ERROR_WANT_WRITE:
+                return 0
+            raise Error("SSL_read failed: SSL_get_error=" + String(Int(err)))
+        return Int(n)
+
+    fn read_into(self, mut buf: Bytes, max_len: Int) raises -> Int:
+        var start = len(buf)
+        buf.resize(start + max_len, UInt8(0))
+        var p = buf.unsafe_ptr() + start
+        var n = self.read(p, max_len)
+        buf.resize(start + n, UInt8(0))
+        return n
+
+
+struct ServerTlsSocket(Movable):
+    """Server-side TLS socket: loads cert+key, does SSL_accept."""
+
+    var _ssl_lib: SslLib
+    var tcp: TcpSocket
+    var ctx: SSL_CTX_ptr
+    var ssl: SSL_ptr
+
+    fn __init__(
+        out self, fd: c_int,
+        cert_path: String, key_path: String,
+        ca_path: String = String(""),
+    ) raises:
+        self._ssl_lib = SslLib()
+        self.tcp = TcpSocket(fd)
+        self.ctx = self._ssl_lib.SSL_CTX_new(self._ssl_lib.TLS_server_method())
+        self.ssl = SSL_ptr()
+
+        if not self.ctx:
+            raise Error("SSL_CTX_new (server) failed")
+
+        # Load server certificate + key
+        var cert_s = cert_path
+        var rc = self._ssl_lib.SSL_CTX_use_certificate_file(
+            self.ctx, cert_s.as_c_string_slice().unsafe_ptr(), SSL_FILETYPE_PEM_VAL
+        )
+        if rc != 1:
+            raise Error("SSL_CTX_use_certificate_file failed")
+
+        var key_s = key_path
+        rc = self._ssl_lib.SSL_CTX_use_PrivateKey_file(
+            self.ctx, key_s.as_c_string_slice().unsafe_ptr(), SSL_FILETYPE_PEM_VAL
+        )
+        if rc != 1:
+            raise Error("SSL_CTX_use_PrivateKey_file failed")
+
+        rc = self._ssl_lib.SSL_CTX_check_private_key(self.ctx)
+        if rc != 1:
+            raise Error("SSL_CTX_check_private_key failed: cert/key mismatch")
+
+        # ALPN h2
+        var alpn = List[UInt8]()
+        alpn.append(2)
+        alpn.append(UInt8(ord("h")))
+        alpn.append(UInt8(ord("2")))
+        _ = self._ssl_lib.SSL_CTX_set_alpn_protos(self.ctx, alpn.unsafe_ptr(), c_uint(3))
+
+        # mTLS: require + verify client cert if CA path provided
+        if len(ca_path) > 0:
+            var ca_s = ca_path
+            rc = self._ssl_lib.SSL_CTX_load_verify_locations(
+                self.ctx, ca_s.as_c_string_slice().unsafe_ptr()
+            )
+            if rc != 1:
+                raise Error("SSL_CTX_load_verify_locations failed for " + ca_path)
+            self._ssl_lib.SSL_CTX_set_verify(
+                self.ctx, SSL_VERIFY_PEER_VAL | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
+            )
+
+        # Create SSL session and do server-side handshake
+        self.ssl = self._ssl_lib.SSL_new(self.ctx)
+        if not self.ssl:
+            raise Error("SSL_new (server) failed")
+
+        _ = self._ssl_lib.SSL_set_fd(self.ssl, self.tcp.fd)
+
+        rc = self._ssl_lib.SSL_accept(self.ssl)
+        if rc != 1:
+            var err = self._ssl_lib.SSL_get_error(self.ssl, rc)
+            raise Error("SSL_accept failed: SSL_get_error=" + String(Int(err)))
+
+    fn __moveinit__(out self: ServerTlsSocket, deinit take: ServerTlsSocket):
         self._ssl_lib = take._ssl_lib^
         self.tcp = take.tcp^
         self.ctx = take.ctx

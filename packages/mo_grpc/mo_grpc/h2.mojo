@@ -19,6 +19,7 @@ comptime FRAME_HEADERS: UInt8 = 0x1
 comptime FRAME_SETTINGS: UInt8 = 0x4
 comptime FRAME_PING: UInt8 = 0x6
 comptime FRAME_GOAWAY: UInt8 = 0x7
+comptime FRAME_RST_STREAM: UInt8 = 0x3
 comptime FRAME_WINDOW_UPDATE: UInt8 = 0x8
 
 # HTTP/2 flags
@@ -96,6 +97,19 @@ comptime SETTINGS_MAX_FRAME_SIZE: Int = 0x5
 # HTTP/2 defaults
 comptime DEFAULT_MAX_FRAME_SIZE: Int = 16384
 comptime DEFAULT_INITIAL_WINDOW_SIZE: Int = 65535
+
+
+# RST_STREAM error codes
+comptime H2_NO_ERROR: Int = 0
+comptime H2_PROTOCOL_ERROR: Int = 1
+comptime H2_INTERNAL_ERROR: Int = 2
+comptime H2_CANCEL: Int = 8
+
+
+fn _build_rst_stream(stream_id: Int, error_code: Int) -> Bytes:
+    var payload = Bytes()
+    _write_u32_be(payload, error_code)
+    return _build_frame(FRAME_RST_STREAM, UInt8(0), stream_id, payload^)
 
 
 fn _parse_settings_payload(payload: Bytes, mut max_frame_size: Int, mut initial_window_size: Int):
@@ -941,6 +955,8 @@ struct H2FrameEvent(Movable):
     var trailers: Dict[String, String]
     var is_data: Bool
     var is_trailers: Bool
+    var is_rst_stream: Bool
+    var rst_error_code: Int
     var is_end_stream: Bool
 
     fn __init__(out self):
@@ -948,6 +964,8 @@ struct H2FrameEvent(Movable):
         self.trailers = Dict[String, String]()
         self.is_data = False
         self.is_trailers = False
+        self.is_rst_stream = False
+        self.rst_error_code = 0
         self.is_end_stream = False
 
     fn __moveinit__(out self: H2FrameEvent, deinit take: H2FrameEvent):
@@ -955,6 +973,8 @@ struct H2FrameEvent(Movable):
         self.trailers = take.trailers^
         self.is_data = take.is_data
         self.is_trailers = take.is_trailers
+        self.is_rst_stream = take.is_rst_stream
+        self.rst_error_code = take.rst_error_code
         self.is_end_stream = take.is_end_stream
 
     @staticmethod
@@ -963,6 +983,14 @@ struct H2FrameEvent(Movable):
         ev.data = data.copy()
         ev.is_data = True
         ev.is_end_stream = end_stream
+        return ev^
+
+    @staticmethod
+    fn make_rst_stream(error_code: Int) -> H2FrameEvent:
+        var ev = H2FrameEvent()
+        ev.is_rst_stream = True
+        ev.rst_error_code = error_code
+        ev.is_end_stream = True
         return ev^
 
     @staticmethod
@@ -1184,6 +1212,11 @@ struct H2Connection(Movable):
             elif frame_type == FRAME_HEADERS and frame_stream_id == stream_id:
                 var decoded = _hpack_decode_headers(payload^, self.hpack_dyn_table)
                 return H2FrameEvent.make_trailers(decoded^, end_stream)
+            elif frame_type == FRAME_RST_STREAM and frame_stream_id == stream_id:
+                var error_code = 0
+                if payload_len >= 4:
+                    error_code = _read_u32_be(payload, 0)
+                return H2FrameEvent.make_rst_stream(error_code)
             elif frame_type == FRAME_SETTINGS:
                 if (Int(flags) & Int(FLAG_ACK)) == 0:
                     var ack = _build_settings_ack()
@@ -1204,6 +1237,11 @@ struct H2Connection(Movable):
                 if len(payload) >= 8:
                     error_code = _read_u32_be(payload, 4)
                 raise Error("server sent GOAWAY, error=" + String(error_code))
+
+    fn cancel_stream(mut self, stream_id: Int) raises:
+        """Send RST_STREAM(CANCEL) to abort a stream."""
+        var frame = _build_rst_stream(stream_id, H2_CANCEL)
+        self.tls.write(Span(frame))
 
     fn run_until_stream_close(mut self, stream_id: Int) raises:
         """Read frames until we get END_STREAM on our stream. For unary RPCs."""
