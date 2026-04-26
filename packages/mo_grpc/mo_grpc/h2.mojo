@@ -1345,7 +1345,7 @@ struct H2Connection(Movable):
 
 # --- Server-side HTTP/2 ---
 
-struct H2Request:
+struct H2Request(Movable):
     """An incoming gRPC request parsed from HTTP/2 frames."""
     var stream_id: Int
     var path: String
@@ -1359,6 +1359,13 @@ struct H2Request:
         self.headers = Dict[String, String]()
         self.body = Bytes()
         self.is_end_stream = False
+
+    fn __moveinit__(out self: H2Request, deinit take: H2Request):
+        self.stream_id = take.stream_id
+        self.path = take.path^
+        self.headers = take.headers^
+        self.body = take.body^
+        self.is_end_stream = take.is_end_stream
 
 
 struct H2ServerConnection:
@@ -1428,7 +1435,7 @@ struct H2ServerConnection:
             if frame_type == FRAME_HEADERS and stream_id > 0:
                 var decoded = _hpack_decode_headers(payload^, self.hpack_dyn_table)
                 req.stream_id = stream_id
-                req.headers = decoded
+                req.headers = decoded^
                 req.path = req.headers.get(String(":path")).or_else(String(""))
                 req.is_end_stream = end_stream
                 if end_stream:

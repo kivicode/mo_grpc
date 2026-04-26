@@ -4,7 +4,8 @@ from std.memory import UnsafePointer, memcpy
 from mo_protobuf import ProtoReader, ProtoWriter, ProtoSerializable
 from mo_protobuf.common import Bytes
 from mo_grpc.frame import FRAME_HEADER_LEN, encode_grpc_frame
-from mo_grpc.status import GrpcError, GRPC_STATUS_OK, GRPC_STATUS_UNKNOWN
+from mo_grpc.status import GrpcError, GRPC_STATUS_OK, GRPC_STATUS_UNKNOWN, GRPC_STATUS_CANCELLED
+from mo_grpc.h2 import H2_CANCEL
 from mo_grpc.h2 import H2Connection
 
 
@@ -52,6 +53,14 @@ fn _serialize_grpc_frame[Req: ProtoSerializable & Copyable](request: Req) raises
     ptr[3] = UInt8((body_len >> 8) & 0xFF)
     ptr[4] = UInt8(body_len & 0xFF)
     return framed^
+
+
+fn _check_rst_stream(ev_is_rst: Bool, rst_code: Int) raises:
+    """If the event is RST_STREAM, raise the appropriate GrpcError."""
+    if ev_is_rst:
+        if rst_code == H2_CANCEL:
+            raise GrpcError(GRPC_STATUS_CANCELLED, String("stream cancelled by peer")).to_error()
+        raise GrpcError(GRPC_STATUS_UNKNOWN, String("RST_STREAM error code ") + String(rst_code)).to_error()
 
 
 fn _check_trailers(trailers: Dict[String, String]) raises:
@@ -107,6 +116,7 @@ struct GrpcServerStream[Resp: ProtoSerializable & Copyable]:
 
         while True:
             var ev = self._conn[].read_next_event(self._stream_id)
+            _check_rst_stream(ev.is_rst_stream, ev.rst_error_code)
             if ev.is_data:
                 _append_bytes(self._buf, ev.data)
                 if ev.is_end_stream:
@@ -126,6 +136,11 @@ struct GrpcServerStream[Resp: ProtoSerializable & Copyable]:
                         return _deserialize[Self.Resp](frame_body.value())
                     _check_trailers(self._trailers)
                     return None
+
+    def cancel(mut self) raises:
+        """Cancel the stream by sending RST_STREAM."""
+        self._conn[].cancel_stream(self._stream_id)
+        self._done = True
 
 
 struct GrpcClientStream[Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable]:
@@ -207,6 +222,7 @@ struct GrpcBidiStream[Req: ProtoSerializable & Copyable, Resp: ProtoSerializable
 
         while True:
             var ev = self._conn[].read_next_event(self._stream_id)
+            _check_rst_stream(ev.is_rst_stream, ev.rst_error_code)
             if ev.is_data:
                 _append_bytes(self._buf, ev.data)
                 if ev.is_end_stream:
@@ -229,3 +245,8 @@ struct GrpcBidiStream[Req: ProtoSerializable & Copyable, Resp: ProtoSerializable
 
     def close_send(mut self) raises:
         self._conn[].send_data_frame(self._stream_id, Bytes(), end_stream=True)
+
+    def cancel(mut self) raises:
+        """Cancel the stream by sending RST_STREAM."""
+        self._conn[].cancel_stream(self._stream_id)
+        self._recv_done = True

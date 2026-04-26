@@ -294,10 +294,10 @@ fn _listen(socket: c_int, backlog: c_int) -> c_int:
     return external_call["listen", c_int, type_of(socket), type_of(backlog)](socket, backlog)
 
 
-fn _accept[origin: MutOrigin](
+fn _accept[o1: MutOrigin, o2: MutOrigin](
     socket: c_int,
-    address: UnsafePointer[sockaddr, origin],
-    address_len: UnsafePointer[socklen_t, origin],
+    address: UnsafePointer[sockaddr, o1],
+    address_len: UnsafePointer[socklen_t, o2],
 ) -> c_int:
     return external_call["accept", c_int, type_of(socket), type_of(address), type_of(address_len)](
         socket, address, address_len
@@ -322,14 +322,15 @@ struct ListenSocket:
             socklen_t(size_of[c_int]()),
         )
 
-        var addr = sockaddr_in(
+        var addr = stack_allocation[1, sockaddr_in]()
+        addr[0] = sockaddr_in(
             sin_family=sa_family_t(AF_INET),
             sin_port=htons(c_ushort(port)),
-            sin_addr=in_addr(s_addr=in_addr_t(0)),  # INADDR_ANY
+            sin_addr=in_addr(s_addr=in_addr_t(0)),
             sin_zero=StaticTuple[c_char, 8](),
         )
 
-        var rc = _bind(self.fd, UnsafePointer(to=addr), socklen_t(size_of[sockaddr_in]()))
+        var rc = _bind(self.fd, addr, socklen_t(size_of[sockaddr_in]()))
         if rc != 0:
             _ = _close(self.fd)
             raise Error("bind() failed on port " + String(Int(port)))
@@ -345,13 +346,10 @@ struct ListenSocket:
 
     fn accept(self) raises -> TcpSocket:
         """Accept one connection. Blocks until a client connects."""
-        var client_addr = sockaddr()
-        var addr_len = socklen_t(size_of[sockaddr]())
-        var client_fd = _accept(
-            self.fd,
-            UnsafePointer(to=client_addr),
-            UnsafePointer(to=addr_len),
-        )
+        var client_addr = stack_allocation[1, sockaddr]()
+        var addr_len = stack_allocation[1, socklen_t]()
+        addr_len[0] = socklen_t(size_of[sockaddr]())
+        var client_fd = _accept(self.fd, client_addr, addr_len)
         if client_fd == -1:
             raise Error("accept() failed")
         return TcpSocket(client_fd)
