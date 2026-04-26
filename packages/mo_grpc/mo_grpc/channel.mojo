@@ -138,16 +138,91 @@ struct GrpcChannel(Movable):
 
     def unary_stream[
         Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable
-    ](mut self, method: String, request: Req,) raises -> GrpcServerStream[Resp]:
-        """Server-streaming is not yet implemented via libcurl easy handle. Requires multi handle + incremental frame decoding (TODO)."""
-        raise Error("unary_stream not yet implemented")
+    ](
+        mut self,
+        method: String,
+        request: Req,
+        timeout_ms: Int = 0,
+        metadata: Dict[String, String] = Dict[String, String](),
+    ) raises -> GrpcServerStream[Resp]:
+        """Server-streaming: send one request, receive many responses."""
+        # Frame the request
+        var writer = ProtoWriter()
+        writer.buf.resize(FRAME_HEADER_LEN, UInt8(0))
+        request.serialize(writer)
+        var framed_request = writer.flush()
+        var request_body_len = len(framed_request) - FRAME_HEADER_LEN
+        var hp = framed_request.unsafe_ptr()
+        hp[0] = UInt8(0)
+        hp[1] = UInt8((request_body_len >> 24) & 0xFF)
+        hp[2] = UInt8((request_body_len >> 16) & 0xFF)
+        hp[3] = UInt8((request_body_len >> 8) & 0xFF)
+        hp[4] = UInt8(request_body_len & 0xFF)
+
+        var hdrs = grpc_headers(timeout_ms=timeout_ms, metadata=metadata)
+        self._ensure_connected()
+
+        if timeout_ms > 0:
+            self._conn.value().tls.tcp.set_timeout(timeout_ms)
+
+        # submit_request sends HEADERS + DATA with END_STREAM (unary request)
+        var stream_id = self._conn.value().submit_request(
+            method=String("POST"), path=method, authority=self._host,
+            headers=hdrs, body=framed_request,
+        )
+
+        # Read the initial response HEADERS (status, content-type)
+        var ev = self._conn.value().read_next_event(stream_id)
+        if ev.is_trailers:
+            self._conn.value().response.headers = ev.trailers.copy()
+
+        return GrpcServerStream[Resp](
+            UnsafePointer[H2Connection, MutExternalOrigin](unsafe_from_address=Int(UnsafePointer(to=self._conn.value()))), stream_id
+        )
 
     def stream_unary[
         Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable
-    ](mut self, method: String,) raises -> GrpcClientStream[Req, Resp]:
-        raise Error("stream_unary not yet implemented")
+    ](
+        mut self,
+        method: String,
+        timeout_ms: Int = 0,
+        metadata: Dict[String, String] = Dict[String, String](),
+    ) raises -> GrpcClientStream[Req, Resp]:
+        """Client-streaming: send many requests, receive one response."""
+        var hdrs = grpc_headers(timeout_ms=timeout_ms, metadata=metadata)
+        self._ensure_connected()
+
+        if timeout_ms > 0:
+            self._conn.value().tls.tcp.set_timeout(timeout_ms)
+
+        # Send HEADERS only (no END_STREAM, client will send data later)
+        var stream_id = self._conn.value().send_headers_only(
+            method=String("POST"), path=method, authority=self._host, headers=hdrs,
+        )
+
+        return GrpcClientStream[Req, Resp](
+            UnsafePointer[H2Connection, MutExternalOrigin](unsafe_from_address=Int(UnsafePointer(to=self._conn.value()))), stream_id
+        )
 
     def bidi[
         Req: ProtoSerializable & Copyable, Resp: ProtoSerializable & Copyable
-    ](mut self, method: String,) raises -> GrpcBidiStream[Req, Resp]:
-        raise Error("bidi not yet implemented")
+    ](
+        mut self,
+        method: String,
+        timeout_ms: Int = 0,
+        metadata: Dict[String, String] = Dict[String, String](),
+    ) raises -> GrpcBidiStream[Req, Resp]:
+        """Bidi-streaming: both sides send many messages."""
+        var hdrs = grpc_headers(timeout_ms=timeout_ms, metadata=metadata)
+        self._ensure_connected()
+
+        if timeout_ms > 0:
+            self._conn.value().tls.tcp.set_timeout(timeout_ms)
+
+        var stream_id = self._conn.value().send_headers_only(
+            method=String("POST"), path=method, authority=self._host, headers=hdrs,
+        )
+
+        return GrpcBidiStream[Req, Resp](
+            UnsafePointer[H2Connection, MutExternalOrigin](unsafe_from_address=Int(UnsafePointer(to=self._conn.value()))), stream_id
+        )

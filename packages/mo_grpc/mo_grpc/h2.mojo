@@ -935,6 +935,45 @@ struct H2Response(Movable):
         self.body = take.body^
 
 
+struct H2FrameEvent(Movable):
+    """Result of reading one relevant frame from the HTTP/2 connection."""
+    var data: Bytes
+    var trailers: Dict[String, String]
+    var is_data: Bool
+    var is_trailers: Bool
+    var is_end_stream: Bool
+
+    fn __init__(out self):
+        self.data = Bytes()
+        self.trailers = Dict[String, String]()
+        self.is_data = False
+        self.is_trailers = False
+        self.is_end_stream = False
+
+    fn __moveinit__(out self: H2FrameEvent, deinit take: H2FrameEvent):
+        self.data = take.data^
+        self.trailers = take.trailers^
+        self.is_data = take.is_data
+        self.is_trailers = take.is_trailers
+        self.is_end_stream = take.is_end_stream
+
+    @staticmethod
+    def make_data(data: Bytes, end_stream: Bool) -> H2FrameEvent:
+        var ev = H2FrameEvent()
+        ev.data = data.copy()
+        ev.is_data = True
+        ev.is_end_stream = end_stream
+        return ev^
+
+    @staticmethod
+    def make_trailers(trailers: Dict[String, String], end_stream: Bool) -> H2FrameEvent:
+        var ev = H2FrameEvent()
+        ev.trailers = trailers.copy()
+        ev.is_trailers = True
+        ev.is_end_stream = end_stream
+        return ev^
+
+
 # --- H2 Connection ---
 
 struct H2Connection(Movable):
@@ -1114,13 +1153,13 @@ struct H2Connection(Movable):
                     error_code = _read_u32_be(payload, 4)
                 raise Error("server sent GOAWAY, error=" + String(error_code))
 
-    fn run_until_stream_close(mut self, stream_id: Int) raises:
-        """Read frames until we get END_STREAM on our stream."""
-        var got_end_stream = False
-        var got_headers = False
+    fn read_next_event(mut self, stream_id: Int) raises -> H2FrameEvent:
+        """Read frames until we get a DATA or HEADERS frame for our stream.
 
-        while not got_end_stream:
-            # Read 9-byte frame header
+        Control frames (SETTINGS, PING, WINDOW_UPDATE, GOAWAY) are handled
+        inline. Returns an H2FrameEvent with either data or trailers.
+        """
+        while True:
             var frame_header = Bytes()
             self._read_exact(frame_header, 9)
 
@@ -1129,42 +1168,26 @@ struct H2Connection(Movable):
             var flags = frame_header[4]
             var frame_stream_id = _read_u32_be(frame_header, 5) & 0x7FFFFFFF
 
-            # Read payload
             var payload = Bytes()
             if payload_len > 0:
                 self._read_exact(payload, payload_len)
 
-            if frame_type == FRAME_SETTINGS:
-                if (Int(flags) & Int(FLAG_ACK)) == 0:
-                    # Respond with SETTINGS ACK
-                    var ack = _build_settings_ack()
-                    self.tls.write(Span(ack))
-            elif frame_type == FRAME_HEADERS and frame_stream_id == stream_id:
-                var decoded = _hpack_decode_headers(payload^, self.hpack_dyn_table)
-                if not got_headers:
-                    self.response.headers = decoded^
-                    got_headers = True
-                else:
-                    self.response.trailers = decoded^
-                if (Int(flags) & Int(FLAG_END_STREAM)) != 0:
-                    got_end_stream = True
-            elif frame_type == FRAME_DATA and frame_stream_id == stream_id:
-                # Append data to response body
-                var start = len(self.response.body)
-                self.response.body.resize(start + len(payload), UInt8(0))
-                memcpy(
-                    dest=self.response.body.unsafe_ptr() + start,
-                    src=payload.unsafe_ptr(),
-                    count=len(payload),
-                )
-                if (Int(flags) & Int(FLAG_END_STREAM)) != 0:
-                    got_end_stream = True
-                # Send WINDOW_UPDATE for connection and stream
+            var end_stream = (Int(flags) & Int(FLAG_END_STREAM)) != 0
+
+            if frame_type == FRAME_DATA and frame_stream_id == stream_id:
                 if payload_len > 0:
                     var wu_conn = _build_window_update(0, payload_len)
                     var wu_stream = _build_window_update(stream_id, payload_len)
                     self.tls.write(Span(wu_conn))
                     self.tls.write(Span(wu_stream))
+                return H2FrameEvent.make_data(payload^, end_stream)
+            elif frame_type == FRAME_HEADERS and frame_stream_id == stream_id:
+                var decoded = _hpack_decode_headers(payload^, self.hpack_dyn_table)
+                return H2FrameEvent.make_trailers(decoded^, end_stream)
+            elif frame_type == FRAME_SETTINGS:
+                if (Int(flags) & Int(FLAG_ACK)) == 0:
+                    var ack = _build_settings_ack()
+                    self.tls.write(Span(ack))
             elif frame_type == FRAME_WINDOW_UPDATE:
                 if payload_len >= 4:
                     var increment = _read_u32_be(payload, 0) & 0x7FFFFFFF
@@ -1174,7 +1197,6 @@ struct H2Connection(Movable):
                         self.stream_window += increment
             elif frame_type == FRAME_PING:
                 if (Int(flags) & Int(FLAG_ACK)) == 0:
-                    # Reply with PING ACK
                     var pong = _build_frame(FRAME_PING, FLAG_ACK, 0, payload^)
                     self.tls.write(Span(pong))
             elif frame_type == FRAME_GOAWAY:
@@ -1182,7 +1204,92 @@ struct H2Connection(Movable):
                 if len(payload) >= 8:
                     error_code = _read_u32_be(payload, 4)
                 raise Error("server sent GOAWAY, error=" + String(error_code))
-            # else: ignore unknown frame types per HTTP/2 spec
+
+    fn run_until_stream_close(mut self, stream_id: Int) raises:
+        """Read frames until we get END_STREAM on our stream. For unary RPCs."""
+        var got_end_stream = False
+        var got_headers = False
+
+        while not got_end_stream:
+            var ev = self.read_next_event(stream_id)
+            if ev.is_data:
+                var start = len(self.response.body)
+                self.response.body.resize(start + len(ev.data), UInt8(0))
+                memcpy(
+                    dest=self.response.body.unsafe_ptr() + start,
+                    src=ev.data.unsafe_ptr(),
+                    count=len(ev.data),
+                )
+            elif ev.is_trailers:
+                if not got_headers:
+                    self.response.headers = ev.trailers.copy()
+                    got_headers = True
+                else:
+                    self.response.trailers = ev.trailers.copy()
+            got_end_stream = ev.is_end_stream
+
+    fn send_headers_only(
+        mut self,
+        method: String,
+        path: String,
+        authority: String,
+        headers: Dict[String, String],
+    ) raises -> Int:
+        """Send HEADERS without END_STREAM (for client-streaming/bidi). Returns stream ID."""
+        var stream_id = self.next_stream_id
+        self.next_stream_id += 2
+        self.response = H2Response()
+        self.stream_window = DEFAULT_INITIAL_WINDOW_SIZE
+
+        var hpack_block = Bytes()
+        _hpack_encode_literal(hpack_block, String(":method"), method)
+        _hpack_encode_literal(hpack_block, String(":path"), path)
+        _hpack_encode_literal(hpack_block, String(":scheme"), String("https"))
+        _hpack_encode_literal(hpack_block, String(":authority"), authority)
+        for entry in headers.items():
+            _hpack_encode_literal(hpack_block, entry.key, entry.value)
+
+        var headers_frame = _build_frame(FRAME_HEADERS, FLAG_END_HEADERS, stream_id, hpack_block^)
+        self.tls.write(Span(headers_frame))
+        return stream_id
+
+    fn send_data_frame(mut self, stream_id: Int, body: Bytes, end_stream: Bool) raises:
+        """Send a single DATA frame, respecting flow control. Splits if needed."""
+        var flags = FLAG_END_STREAM if end_stream else UInt8(0)
+        if len(body) == 0:
+            var frame = _build_frame(FRAME_DATA, flags, stream_id, body)
+            self.tls.write(Span(frame))
+            return
+
+        var offset = 0
+        var total = len(body)
+        while offset < total:
+            var remaining = total - offset
+            var chunk_size = remaining
+            if chunk_size > self.peer_max_frame_size:
+                chunk_size = self.peer_max_frame_size
+            if chunk_size > self.conn_window:
+                chunk_size = self.conn_window
+            if chunk_size > self.stream_window:
+                chunk_size = self.stream_window
+
+            if chunk_size <= 0:
+                self._wait_for_window_update(stream_id)
+                continue
+
+            var is_last = (offset + chunk_size >= total)
+            var chunk_flags = flags if is_last else UInt8(0)
+
+            var chunk = Bytes()
+            chunk.resize(chunk_size, UInt8(0))
+            memcpy(dest=chunk.unsafe_ptr(), src=body.unsafe_ptr() + offset, count=chunk_size)
+
+            var frame = _build_frame(FRAME_DATA, chunk_flags, stream_id, chunk^)
+            self.tls.write(Span(frame))
+
+            self.conn_window -= chunk_size
+            self.stream_window -= chunk_size
+            offset += chunk_size
 
     fn _read_exact(self, mut buf: Bytes, count: Int) raises:
         """Read exactly `count` bytes from TLS into buf."""
