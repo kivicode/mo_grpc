@@ -18,6 +18,8 @@ import heavy_pb2
 import heavy_pb2_grpc
 import status_probe_pb2
 import status_probe_pb2_grpc
+import streaming_pb2
+import streaming_pb2_grpc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CERT = os.path.join(HERE, "certs", "server.crt")
@@ -80,6 +82,28 @@ class StatusProbeServicer(status_probe_pb2_grpc.StatusProbeServicer):
         context.abort(_status_code_for(request.code), request.message)
 
 
+class StreamBenchServicer(streaming_pb2_grpc.StreamBenchServicer):
+    def ServerStream(self, request, context):
+        """Reply with 10 copies of the request item."""
+        count = int(os.environ.get("STREAM_COUNT", "10"))
+        for i in range(count):
+            yield streaming_pb2.Item(seq=i, payload=request.payload)
+
+    def ClientStream(self, request_iterator, context):
+        """Consume all items, return a summary."""
+        count = 0
+        total_bytes = 0
+        for item in request_iterator:
+            count += 1
+            total_bytes += len(item.payload)
+        return streaming_pb2.StreamSummary(count=count, total_bytes=total_bytes)
+
+    def BidiStream(self, request_iterator, context):
+        """Echo each item back immediately."""
+        for item in request_iterator:
+            yield streaming_pb2.Item(seq=item.seq, payload=item.payload)
+
+
 def _status_code_for(code: int) -> grpc.StatusCode:
     """Map an integer gRPC status code to grpcio's StatusCode enum.
 
@@ -104,6 +128,7 @@ def main():
     echo_pb2_grpc.add_EchoServicer_to_server(EchoServicer(), server)
     heavy_pb2_grpc.add_HeavyServicer_to_server(HeavyServicer(), server)
     status_probe_pb2_grpc.add_StatusProbeServicer_to_server(StatusProbeServicer(), server)
+    streaming_pb2_grpc.add_StreamBenchServicer_to_server(StreamBenchServicer(), server)
 
     with open(KEY, "rb") as f:
         key = f.read()

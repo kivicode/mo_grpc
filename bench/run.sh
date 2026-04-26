@@ -11,7 +11,7 @@ HEAVY_N="${HEAVY_N:-500}"
 PORT="${BENCH_PORT:-50443}"
 CACERT="$REPO/.pixi/envs/default/ssl/cacert.pem"
 
-PROTOS=(echo heavy status_probe)
+PROTOS=(echo heavy status_probe streaming)
 
 step() {
   printf '\n>>> %s\n' "$*"
@@ -72,6 +72,8 @@ build_mojo() {
 build_mojo "$HERE/bench_mojo.mojo"       "$HERE/bench_mojo"
 build_mojo "$HERE/bench_heavy_mojo.mojo" "$HERE/bench_heavy_mojo"
 build_mojo "$HERE/test_status.mojo"      "$HERE/test_status"
+build_mojo "$HERE/test_streaming.mojo"   "$HERE/test_streaming"
+build_mojo "$HERE/bench_streaming_mojo.mojo" "$HERE/bench_streaming_mojo"
 
 # -- 4. start the gRPC echo server ---------------------------------------------
 # We don't use a separate process group (`set -m`) because we *want* Ctrl-C to
@@ -110,6 +112,9 @@ done
 echo
 cd "$REPO"
 BENCH_PORT="$PORT" "$HERE/test_status"
+echo
+cd "$REPO"
+BENCH_PORT="$PORT" "$HERE/test_streaming"
 
 # -- 6. run all four benches ---------------------------------------------------
 echo
@@ -124,3 +129,9 @@ BENCH_N="$HEAVY_N" BENCH_PORT="$PORT" uv run bench_heavy_python.py
 echo
 cd "$REPO"
 BENCH_N="$HEAVY_N" BENCH_PORT="$PORT" "$HERE/bench_heavy_mojo"
+echo
+cd "$HERE"
+BENCH_N="$TINY_N" BENCH_PORT="$PORT" uv run bench_streaming_python.py
+echo
+cd "$REPO"
+BENCH_N="$TINY_N" BENCH_PORT="$PORT" "$HERE/bench_streaming_mojo"

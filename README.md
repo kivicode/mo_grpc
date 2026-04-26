@@ -29,7 +29,7 @@ Monorepo for three tightly-coupled Mojo packages:
 | Package           | Path                        | What it is                                                                                                                                                                                      |
 | ----------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mo_protobuf`     | `packages/mo_protobuf/`     | Pure-Mojo protobuf wire-format runtime: `ProtoReader`, `ProtoWriter`, `ProtoSerializable` trait. Zero external deps.                                                                            |
-| `mo_grpc`         | `packages/mo_grpc/`         | gRPC client + runtime. 5-byte frame codec, `GrpcChannel` with HTTP/2 + TLS over libcurl, server/client/bidi stream handles. Depends on `mo_protobuf`.                                           |
+| `mo_grpc`         | `packages/mo_grpc/`         | gRPC client + runtime. 5-byte frame codec, `GrpcChannel` with HTTP/2 + TLS via native sockets + OpenSSL. Unary + server/client/bidi streaming. Depends on `mo_protobuf`.                        |
 | `protoc-gen-mojo` | `packages/protoc-gen-mojo/` | `protoc` plugin: generates Mojo structs, oneof-union structs, and gRPC server traits + client stubs from `.proto` files. Depends on `mo_protobuf` at runtime (to parse `CodeGeneratorRequest`). |
 
 ## Feature support
@@ -62,28 +62,28 @@ Legend: ✅ implemented and tested · ⚠️ partial · ❌ not implemented
 
 ### gRPC
 
-| Feature                              | Status | Notes                                                                                                                                                                    |
-| ------------------------------------ | :----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 5-byte frame codec (encode + decode) |   ✅   | `encode_grpc_frame`, `decode_grpc_frame`                                                                                                                                 |
-| Client code generation               |   ✅   | `<Service>Stub` struct, one method per RPC                                                                                                                               |
-| Server trait generation              |   ✅   | `<Service>Servicer` trait with method stubs                                                                                                                              |
-| Unary ↔ unary                        |   ✅   | `GrpcChannel.unary_unary[Req, Resp]` - fully wired through libcurl                                                                                                       |
-| HTTP/2                               |   ✅   | `CURL_HTTP_VERSION_2TLS` - negotiates HTTP/2 via ALPN, falls back to 1.1                                                                                                 |
-| TLS / `https://`                     |   ✅   | Automatic via libcurl                                                                                                                                                    |
-| Server-streaming RPC                 |   ❌   | Requires libcurl multi handle + incremental frame parsing (TODO)                                                                                                         |
-| Client-streaming RPC                 |   ❌   | Requires libcurl read callback (TODO)                                                                                                                                    |
-| Bidi-streaming RPC                   |   ❌   | Requires multi handle (TODO)                                                                                                                                             |
-| Server-side runtime (HTTP/2 server)  |   ❌   | Trait is generated; no server dispatcher yet                                                                                                                             |
-| gRPC status code / trailer parsing   |   ✅   | `grpc-status` + `grpc-message` parsed from trailers / trailers-only headers; non-OK raises typed `GrpcError`                                                             |
-| Deadlines / timeouts                 |   ✅   | Per-call `timeout_ms` on every generated stub method; sets `CURLOPT_TIMEOUT_MS` and sends `grpc-timeout` for server enforcement; expiry → `GrpcError(DEADLINE_EXCEEDED)` |
-| Cancellation                         |   ❌   |                                                                                                                                                                          |
-| Metadata (headers) - send            |   ✅   | `metadata: Dict[String, String]` per call; lowercased + validated per gRPC spec; `grpc-*`, HTTP/2 pseudo-headers, transport-managed names rejected client-side           |
-| Metadata (headers) - receive         |   ❌   | Write callback only captures the body                                                                                                                                    |
-| mTLS / client certs                  |   ❌   | libcurl supports it; not exposed on `GrpcChannel`                                                                                                                        |
-| Auth (bearer tokens, OAuth2)         |   ✅   | Pass `authorization: Bearer <token>` (or any custom auth header) via the `metadata` parameter                                                                            |
-| Compression (gzip, snappy)           |   ❌   | Frame codec always writes compression-flag = 0                                                                                                                           |
-| Retry / reconnection                 |   ❌   |                                                                                                                                                                          |
-| gRPC reflection                      |   ❌   |                                                                                                                                                                          |
+| Feature                              | Status | Notes                                                                                                                                                          |
+| ------------------------------------ | :----: | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5-byte frame codec (encode + decode) |   ✅   | `encode_grpc_frame`, `decode_grpc_frame`                                                                                                                       |
+| Client code generation               |   ✅   | `<Service>Stub` struct, one method per RPC                                                                                                                     |
+| Server trait generation              |   ✅   | `<Service>Servicer` trait with method stubs                                                                                                                    |
+| Unary <-> unary                      |   ✅   | `GrpcChannel.unary_unary[Req, Resp]` - fully wired, HTTP/2 + TLS                                                                                               |
+| HTTP/2                               |   ✅   | Pure-Mojo HTTP/2 client: connection preface, SETTINGS, HPACK, DATA, WINDOW_UPDATE, PING, GOAWAY                                                                |
+| TLS / `https://`                     |   ✅   | OpenSSL FFI via `DLHandle.get_function`; ALPN `h2` negotiation, SNI, system CA store                                                                           |
+| Server-streaming RPC                 |   ✅   | `GrpcChannel.unary_stream` → `GrpcServerStream[Resp]` with `recv()` iterator                                                                                   |
+| Client-streaming RPC                 |   ✅   | `GrpcChannel.stream_unary` → `GrpcClientStream[Req, Resp]` with `send()` + `close_and_recv()`                                                                  |
+| Bidi-streaming RPC                   |   ✅   | `GrpcChannel.bidi` → `GrpcBidiStream[Req, Resp]` with `send()` + `recv()` + `close_send()`                                                                     |
+| Server-side runtime (HTTP/2 server)  |   ❌   | Trait is generated; no server dispatcher yet                                                                                                                   |
+| gRPC status code / trailer parsing   |   ✅   | `grpc-status` + `grpc-message` parsed from trailers / trailers-only headers; non-OK raises typed `GrpcError`                                                   |
+| Deadlines / timeouts                 |   ✅   | Per-call `timeout_ms`; sets `SO_RCVTIMEO` + `grpc-timeout` header; expiry → `GrpcError(DEADLINE_EXCEEDED)`                                                     |
+| Cancellation                         |   ❌   |                                                                                                                                                                |
+| Metadata (headers) - send            |   ✅   | `metadata: Dict[String, String]` per call; lowercased + validated per gRPC spec; `grpc-*`, HTTP/2 pseudo-headers, transport-managed names rejected client-side |
+| Metadata (headers) - receive         |   ✅   | Response headers + trailers parsed from HPACK-encoded HTTP/2 HEADERS frames                                                                                    |
+| mTLS / client certs                  |   ❌   | OpenSSL supports it; not exposed on `GrpcChannel`                                                                                                              |
+| Auth (bearer tokens, OAuth2)         |   ✅   | Pass `authorization: Bearer <token>` (or any custom auth header) via the `metadata` parameter                                                                  |
+| Compression (gzip, snappy)           |   ❌   | Frame codec always writes compression-flag = 0                                                                                                                 |
+| Retry / reconnection                 |   ❌   |                                                                                                                                                                |
+| gRPC reflection                      |   ❌   |                                                                                                                                                                |
 
 ## Benchmarks
 
@@ -100,29 +100,45 @@ bash bench/run.sh
 BENCH_N=10000 HEAVY_N=1000 BENCH_PORT=50443 bash bench/run.sh
 ```
 
-There are two benches, both unary RPCs over loopback HTTP/2 + TLS:
+There are four bench categories, all over loopback HTTP/2 + TLS:
 
-- **tiny** — a 16-byte echo (`PingRequest{seq, payload}`), 5,000 iterations.
-  Measures per-call overhead: framing, libcurl handle reuse, scheduler latency.
-- **heavy** — a deeply nested ~14 KB `Document` with `optional`, `repeated`,
+- **tiny** — 16-byte echo (`PingRequest{seq, payload}`), 5,000 iterations.
+  Measures per-call overhead: framing, connection reuse, scheduler latency.
+- **heavy** — deeply nested ~14 KB `Document` with `optional`, `repeated`,
   `oneof`, `map`, nested messages, recursive `Span` tree (depth 3, fanout 3),
   500 iterations. Stresses the protobuf encoder + parser.
+- **streaming** — server/client/bidi streaming RPCs, 5,000 iterations each.
+  Measures streaming frame overhead and incremental read/write performance.
 
 Numbers below are medians across 3 back-to-back runs of the harness.
 
 **Hardware:** Apple M3 Max, 14 cores, 36 GB, macOS 15.6.1.
 **Toolchain:** Mojo 0.26.2.0 (`mojo build -O3`), grpcio 1.80.0, Python 3.12.
+**Transport:** Pure-Mojo HTTP/2 + OpenSSL (no libcurl, no nghttp2).
+
+#### Unary RPCs
 
 | bench | client        | iterations | body size |      throughput |     median |        p95 |        p99 |
 | ----- | ------------- | ---------- | --------: | --------------: | ---------: | ---------: | ---------: |
-| tiny  | python grpcio | 5,000      |      16 B |     5,995 req/s |     161 µs |     217 µs |     247 µs |
-| tiny  | **mo_grpc**   | 5,000      |      16 B | **6,577 req/s** | **148 µs** | **190 µs** | **228 µs** |
-| heavy | python grpcio | 500        |  14,386 B |     3,520 req/s |     268 µs |     375 µs |     462 µs |
-| heavy | **mo_grpc**   | 500        |  16,739 B |     3,382 req/s |     278 µs |     358 µs |     479 µs |
+| tiny  | python grpcio | 5,000      |      16 B |     5,890 req/s |     164 µs |     221 µs |     254 µs |
+| tiny  | **mo_grpc**   | 5,000      |      16 B | **9,117 req/s** | **104 µs** | **146 µs** | **174 µs** |
+| heavy | python grpcio | 500        |  14,386 B |     3,532 req/s |     275 µs |     346 µs |     414 µs |
+| heavy | **mo_grpc**   | 500        |  16,739 B | **3,771 req/s** | **249 µs** | **304 µs** | **329 µs** |
+
+#### Streaming RPCs
+
+| bench         | client        | iterations |    items/call |        throughput |     median |        p95 |        p99 |
+| ------------- | ------------- | ---------- | ------------: | ----------------: | ---------: | ---------: | ---------: |
+| server-stream | python grpcio | 5,000      |       10 recv |     1,782 calls/s |     553 µs |     655 µs |     743 µs |
+| server-stream | **mo_grpc**   | 5,000      |       10 recv | **1,992 calls/s** | **448 µs** | **537 µs** | **609 µs** |
+| client-stream | python grpcio | 5,000      |        5 send |     2,611 calls/s |     377 µs |     445 µs |     603 µs |
+| client-stream | **mo_grpc**   | 5,000      |        5 send | **5,148 calls/s** | **184 µs** | **264 µs** | **326 µs** |
+| bidi-stream   | python grpcio | 5,000      | 5 send+5 recv |     1,559 calls/s |     638 µs |     715 µs |     762 µs |
+| bidi-stream   | **mo_grpc**   | 5,000      | 5 send+5 recv | **1,776 calls/s** | **399 µs** | **508 µs** | **670 µs** |
 
 ## Dev workflow
 
-The root `pixi.toml` is a dev workspace that pins `modular`, `mojo-curl`, and `curl_wrapper` for running everything out of a source checkout.
+The root `pixi.toml` is a dev workspace that pins `modular` and `openssl` for running everything out of a source checkout.
 
 ```bash
 # install pixi if needed
