@@ -7,7 +7,7 @@ channels = [
 ]
 name = "mo_grpc"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
-description = "Mojo gRPC client + runtime (HTTP/2 + TLS via native sockets + nghttp2)."
+description = "Mojo gRPC client + server runtime (HTTP/2 + TLS via native sockets + OpenSSL)."
 license = "MIT"
 license-file = "LICENSE"
 readme = "README.md"
@@ -23,7 +23,7 @@ backend = { name = "pixi-build-mojo", version = "*" }
 
 [dependencies]
 mojo = ">=0.26.2.0,<0.26.3.0"
-mo_protobuf = { path = "../mo_protobuf" }
+mo_protobuf = ">=0.1.0"
 openssl = ">=3.0,<4"
 
 [package.build-dependencies]
@@ -31,12 +31,12 @@ mojo-compiler = ">=0.26.2.0,<0.26.3.0"
 
 [package.host-dependencies]
 mojo-compiler = ">=0.26.2.0,<0.26.3.0"
-mo_protobuf = { path = "../mo_protobuf" }
+mo_protobuf = ">=0.1.0"
 openssl = ">=3.0,<4"
 
 [package.run-dependencies]
 mojo-compiler = ">=0.26.2.0,<0.26.3.0"
-mo_protobuf = { path = "../mo_protobuf" }
+mo_protobuf = ">=0.1.0"
 openssl = ">=3.0,<4"
 
 [tasks]
