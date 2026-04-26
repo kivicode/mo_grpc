@@ -1,13 +1,10 @@
 """gRPC server runtime.
 
-Example usage:
-
-    fn echo_handler(body: Bytes) raises -> Bytes:
-        # deserialize request, process, serialize response
-        ...
+Usage (with generated add_*Servicer_to_server):
 
     var server = GrpcServer("127.0.0.1", 50443, "cert.pem", "key.pem")
-    server.add_route("/echo.Echo/Ping", echo_handler)
+    add_EchoServicer_to_server(MyEcho(), server)
+    add_HeavyServicer_to_server(MyHeavy(), server)
     server.serve_forever()
 """
 
@@ -21,9 +18,8 @@ from mo_grpc.frame import FRAME_HEADER_LEN as GRPC_FRAME_HEADER_LEN
 from mo_grpc.status import GRPC_STATUS_OK, GRPC_STATUS_UNIMPLEMENTED, GRPC_STATUS_INTERNAL
 
 
-# Handler type: raw protobuf bytes in → raw protobuf bytes out.
-# Users deserialize/serialize inside the handler.
-comptime UnaryHandler = fn (Bytes) raises -> Bytes
+comptime OpaqueCtx = UnsafePointer[NoneType, MutExternalOrigin]
+comptime RouteHandler = fn (Bytes, OpaqueCtx) raises -> Bytes
 
 
 fn _make_grpc_frame(body: Bytes) -> Bytes:
@@ -58,19 +54,15 @@ fn _extract_grpc_body(data: Bytes) raises -> Bytes:
 @fieldwise_init
 struct _Route(Copyable, Movable):
     var path: String
-    var handler: UnaryHandler
+    var handler: RouteHandler
+    var ctx: OpaqueCtx
 
 
 struct GrpcServer:
     """Single-threaded gRPC server over HTTP/2 + TLS.
 
-    Usage:
-        var server = GrpcServer("127.0.0.1", 50443, "cert.pem", "key.pem")
-        server.add_route("/package.Service/Method", handler_fn)
-        server.serve_forever()
-
-    Handler signature: fn(Bytes) raises -> Bytes
-    (receives raw protobuf body, returns raw protobuf response body)
+    Register services with the generated add_*Servicer_to_server functions,
+    then call serve_forever() to start accepting connections.
     """
 
     var _listener: ListenSocket
@@ -93,16 +85,19 @@ struct GrpcServer:
         self._ca_path = ca_path
         self._routes = List[_Route]()
 
-    fn add_route(mut self, path: String, handler: UnaryHandler):
-        """Register a unary RPC handler for the given method path."""
-        self._routes.append(_Route(path, handler))
+    fn add_route(mut self, path: String, handler: RouteHandler, ctx: OpaqueCtx):
+        """Register a route. Called by generated add_*Servicer_to_server."""
+        self._routes.append(_Route(path, handler, ctx))
 
-    fn serve_one(mut self) raises:
-        """Accept one connection and serve all requests until it closes."""
+    fn accept(mut self) raises -> H2ServerConnection:
         var client = self._listener.accept()
         var fd = client.fd
         client.fd = -1
-        var conn = H2ServerConnection(fd, self._cert_path, self._key_path, self._ca_path)
+        return H2ServerConnection(fd, self._cert_path, self._key_path, self._ca_path)
+
+    fn serve_one(mut self) raises:
+        """Accept one connection and serve all requests on it."""
+        var conn = self.accept()
         self._serve_connection(conn)
 
     fn serve_forever(mut self) raises:
@@ -130,7 +125,7 @@ struct GrpcServer:
                     handled = True
                     try:
                         var body = _extract_grpc_body(req.body)
-                        var resp_body = self._routes[i].handler(body)
+                        var resp_body = self._routes[i].handler(body, self._routes[i].ctx)
                         var framed = _make_grpc_frame(resp_body^)
                         conn.send_response(req.stream_id, GRPC_STATUS_OK, String(""), framed)
                     except e:
@@ -144,7 +139,7 @@ struct GrpcServer:
                 try:
                     conn.send_error(
                         req.stream_id, GRPC_STATUS_UNIMPLEMENTED,
-                        String("unknown method: ") + req.path
+                        String("unknown method: ") + req.path,
                     )
                 except:
                     return

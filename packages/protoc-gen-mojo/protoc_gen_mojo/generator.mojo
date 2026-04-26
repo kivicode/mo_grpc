@@ -216,7 +216,11 @@ def generate_prelude(deps: List[String], module_prefix: String = "", has_service
         var mod = proto_path_to_module(dep, module_prefix)
         out += ts(t"from {mod} import *\n")
     if has_services:
-        out += "from mo_grpc import GrpcChannel, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
+        out += "from mo_grpc import GrpcChannel, GrpcServer, GrpcServerStream, GrpcClientStream, GrpcBidiStream\n"
+        out += "from mo_grpc.h2 import H2ServerConnection, H2Request\n"
+        out += "from mo_grpc.server import OpaqueCtx\n"
+        out += "from mo_protobuf.common import Bytes\n"
+        out += "from std.memory import UnsafePointer, alloc\n"
     return out
 
 
@@ -743,6 +747,42 @@ def generate_service(svc: ServiceDescriptorProto, package: String) -> String:
         else:
             out += ts(t"\n    def {mname}(mut self) raises -> GrpcBidiStream[{req}, {resp}]:\n")
             out += ts(t'        return self._channel.bidi[{req}, {resp}]("{path}")\n')
+
+    # --- Generate per-method handler functions and add_*Servicer_to_server ---
+
+    # For each unary method, generate a top-level handler fn(Bytes, OpaqueCtx) -> Bytes
+    for m in svc.method:
+        var mname = m.name.value() if m.name else "Unknown"
+        var req_type = last_component(m.input_type.value() if m.input_type else "")
+        var resp_type = last_component(m.output_type.value() if m.output_type else "")
+        var cs = m.client_streaming and m.client_streaming.value()
+        var ss = m.server_streaming and m.server_streaming.value()
+
+        if not cs and not ss:
+            out += "\n\n"
+            out += ts(t"fn _handle_{name}_{mname}[T: {name}Servicer](body: Bytes, ctx: OpaqueCtx) raises -> Bytes:\n")
+            out += "    var servicer_ptr = ctx.bitcast[T]()\n"
+            out += "    var b = body.copy()\n"
+            out += "    var reader = ProtoReader(b^)\n"
+            out += ts(t"    var request = {req_type}.parse(reader)\n")
+            out += ts(t"    var response = servicer_ptr[].{mname}(request)\n")
+            out += "    var writer = ProtoWriter()\n"
+            out += "    response.serialize(writer)\n"
+            out += "    return writer.flush()\n"
+
+    # Generate add_<Service>Servicer_to_server
+    out += "\n\n"
+    out += ts(t"fn add_{name}Servicer_to_server[T: {name}Servicer](ref servicer: T, mut server: GrpcServer):\n")
+    out += ts(t'    """Register {name} RPC handlers. Servicer must outlive the server."""\n')
+    out += "    var ctx = UnsafePointer[NoneType, MutExternalOrigin](unsafe_from_address=Int(UnsafePointer(to=servicer)))\n"
+
+    for m in svc.method:
+        var mname = m.name.value() if m.name else "Unknown"
+        var path = pkg_prefix + name + "/" + mname
+        var cs = m.client_streaming and m.client_streaming.value()
+        var ss = m.server_streaming and m.server_streaming.value()
+        if not cs and not ss:
+            out += ts(t'    server.add_route(String("{path}"), _handle_{name}_{mname}[T], ctx)\n')
 
     return out
 
