@@ -5,11 +5,11 @@ gRPC client + runtime for Mojo.
 ## Contents
 
 - `encode_grpc_frame` / `decode_grpc_frame` - 5-byte gRPC DATA frame codec
-- `GrpcChannel.unary_unary[Req, Resp]` - fully working HTTP/2 + TLS client via libcurl
-- `GrpcServerStream`, `GrpcClientStream`, `GrpcBidiStream` - stream handle types (unary is implemented; streaming variants require the libcurl multi handle and are TODO)
+- `GrpcChannel.unary_unary[Req, Resp]` - fully working HTTP/2 + TLS client via native sockets + OpenSSL + nghttp2
+- `GrpcServerStream`, `GrpcClientStream`, `GrpcBidiStream` - stream handle types (unary is implemented; streaming variants are TODO)
 - `http_post(url, body) -> Bytes` - low-level HTTPS POST helper
 
-Depends on [`mo_protobuf`](https://github.com/kivicode/mo_grpc/tree/main/packages/mo_protobuf), `mojo-curl`, and the `curl_wrapper` C shim.
+Depends on [`mo_protobuf`](https://github.com/kivicode/mo_grpc/tree/main/packages/mo_protobuf), OpenSSL, and libnghttp2.
 
 ## Install
 

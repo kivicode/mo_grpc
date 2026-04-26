@@ -7,7 +7,7 @@ channels = [
 ]
 name = "mo_grpc"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
-description = "Mojo gRPC client + runtime (HTTP/2 + TLS via libcurl)."
+description = "Mojo gRPC client + runtime (HTTP/2 + TLS via native sockets + nghttp2)."
 license = "MIT"
 license-file = "LICENSE"
 readme = "README.md"
@@ -24,8 +24,7 @@ backend = { name = "pixi-build-mojo", version = "*" }
 [dependencies]
 mojo = ">=0.26.2.0,<0.26.3.0"
 mo_protobuf = { path = "../mo_protobuf" }
-mojo-curl = "*"
-curl_wrapper = { git = "https://github.com/thatstoasty/mojo-curl.git", subdirectory = "shim", branch = "main" }
+openssl = ">=3.0,<4"
 
 [package.build-dependencies]
 mojo-compiler = ">=0.26.2.0,<0.26.3.0"
@@ -33,14 +32,12 @@ mojo-compiler = ">=0.26.2.0,<0.26.3.0"
 [package.host-dependencies]
 mojo-compiler = ">=0.26.2.0,<0.26.3.0"
 mo_protobuf = { path = "../mo_protobuf" }
-mojo-curl = "*"
-curl_wrapper = { git = "https://github.com/thatstoasty/mojo-curl.git", subdirectory = "shim", branch = "main" }
+openssl = ">=3.0,<4"
 
 [package.run-dependencies]
 mojo-compiler = ">=0.26.2.0,<0.26.3.0"
 mo_protobuf = { path = "../mo_protobuf" }
-mojo-curl = "*"
-curl_wrapper = { git = "https://github.com/thatstoasty/mojo-curl.git", subdirectory = "shim", branch = "main" }
+openssl = ">=3.0,<4"
 
 [tasks]
 build = { cmd = "pixi build -o ." }

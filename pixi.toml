@@ -13,15 +13,9 @@ license = "MIT"
 license-file = "LICENSE"
 preview = ["pixi-build"]
 
-# Dev dependencies used when running tests / the generator from a source checkout.
-# `mojo-curl` and its `curl_wrapper` shim live in `vendor/mojo-curl` (git submodule pinned to a specific
-# upstream SHA) so the workspace doesn't depend
-# on the `mojo-community` channel and the `curl_wrapper` package being
-# resolvable as conda metadata (which it isn't, it's only published from a git subdirectory).
 [dependencies]
 modular = ">=26.2.0,<27"
-curl_wrapper = { path = "vendor/mojo-curl/shim" }
-mojo-curl = { path = "vendor/mojo-curl" }
+openssl = ">=3.0,<4"
 
 [tasks]
 test = "bash packages/protoc-gen-mojo/tests/run_tests.sh"

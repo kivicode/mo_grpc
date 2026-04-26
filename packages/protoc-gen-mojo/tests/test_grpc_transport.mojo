@@ -1,9 +1,9 @@
 """
-Integration test for the gRPC transport via mojo-curl.
+Integration test for the gRPC transport layer.
 Hits httpbin.org which echoes POST bodies - verifies:
-  1. HTTPS/TLS works
+  1. HTTPS/TLS works (via OpenSSL)
   2. POST body is sent verbatim
-  3. Response bytes are captured in the write callback
+  3. Response bytes are captured over HTTP/2
 """
 
 from testing import assert_true
@@ -29,7 +29,6 @@ def test_httpbin_post_binary() raises:
 
 def test_http_post_returns_bytes() raises:
     """Verify http_post() returns something non-empty for a known-good URL."""
-    # (note: run in isolation to avoid libcurl global-state issues)
     pass
 
 
