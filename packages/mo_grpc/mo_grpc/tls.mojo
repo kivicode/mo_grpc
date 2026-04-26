@@ -255,13 +255,6 @@ struct ServerTlsSocket(Movable):
         if rc != 1:
             raise Error("SSL_CTX_check_private_key failed: cert/key mismatch")
 
-        # ALPN h2
-        var alpn = List[UInt8]()
-        alpn.append(2)
-        alpn.append(UInt8(ord("h")))
-        alpn.append(UInt8(ord("2")))
-        _ = self._ssl_lib.SSL_CTX_set_alpn_protos(self.ctx, alpn.unsafe_ptr(), c_uint(3))
-
         # mTLS: require + verify client cert if CA path provided
         if len(ca_path) > 0:
             var ca_s = ca_path
