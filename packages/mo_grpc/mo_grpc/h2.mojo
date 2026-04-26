@@ -9,7 +9,7 @@ Implements just enough HTTP/2 for unary request-response:
 
 from std.memory import UnsafePointer, memcpy
 from mo_protobuf.common import Bytes
-from mo_grpc.tls import TlsSocket
+from mo_grpc.tls import TlsSocket, ServerTlsSocket
 from mo_grpc.net import c_void
 from std.ffi import c_int
 
@@ -1337,8 +1337,246 @@ struct H2Connection(Movable):
             try:
                 n = self.tls.read_into(buf, count - total)
             except e:
-                # Socket timeout manifests as SSL_read error
                 raise Error("deadline_exceeded: " + String(e))
+            if n == 0:
+                raise Error("connection closed while reading")
+            total += n
+
+
+# --- Server-side HTTP/2 ---
+
+struct H2Request:
+    """An incoming gRPC request parsed from HTTP/2 frames."""
+    var stream_id: Int
+    var path: String
+    var headers: Dict[String, String]
+    var body: Bytes
+    var is_end_stream: Bool
+
+    fn __init__(out self):
+        self.stream_id = 0
+        self.path = String("")
+        self.headers = Dict[String, String]()
+        self.body = Bytes()
+        self.is_end_stream = False
+
+
+struct H2ServerConnection:
+    """Server-side HTTP/2 connection. Reads client requests, sends responses."""
+
+    var tls: ServerTlsSocket
+    var hpack_dyn_table: List[Tuple[String, String]]
+    var peer_max_frame_size: Int
+    var conn_window: Int
+
+    fn __init__(out self, fd: c_int, cert_path: String, key_path: String, ca_path: String = String("")) raises:
+        self.tls = ServerTlsSocket(fd, cert_path, key_path, ca_path)
+        self.hpack_dyn_table = List[Tuple[String, String]]()
+        self.peer_max_frame_size = DEFAULT_MAX_FRAME_SIZE
+        self.conn_window = DEFAULT_INITIAL_WINDOW_SIZE
+
+        # Read client connection preface (24 bytes: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n")
+        var preface_buf = Bytes()
+        self._read_exact(preface_buf, 24)
+
+        # Send server SETTINGS
+        var settings = _build_settings_frame()
+        self.tls.write(Span(settings))
+
+        # Read client SETTINGS
+        self._read_and_ack_settings()
+
+    fn _read_and_ack_settings(mut self) raises:
+        """Read frames until we get the client's SETTINGS (non-ACK)."""
+        while True:
+            var frame_header = Bytes()
+            self._read_exact(frame_header, 9)
+            var payload_len = _read_u24_be(frame_header, 0)
+            var frame_type = frame_header[3]
+            var flags = frame_header[4]
+            var payload = Bytes()
+            if payload_len > 0:
+                self._read_exact(payload, payload_len)
+            if frame_type == FRAME_SETTINGS:
+                if (Int(flags) & Int(FLAG_ACK)) == 0:
+                    _parse_settings_payload(payload, self.peer_max_frame_size, self.conn_window)
+                    var ack = _build_settings_ack()
+                    self.tls.write(Span(ack))
+                    return
+            elif frame_type == FRAME_WINDOW_UPDATE:
+                if payload_len >= 4:
+                    self.conn_window += _read_u32_be(payload, 0) & 0x7FFFFFFF
+
+    fn read_request(mut self) raises -> H2Request:
+        """Read one complete gRPC request (HEADERS + DATA until END_STREAM)."""
+        var req = H2Request()
+
+        # Read frames until we get HEADERS for a new stream
+        while True:
+            var frame_header = Bytes()
+            self._read_exact(frame_header, 9)
+            var payload_len = _read_u24_be(frame_header, 0)
+            var frame_type = frame_header[3]
+            var flags = frame_header[4]
+            var stream_id = _read_u32_be(frame_header, 5) & 0x7FFFFFFF
+            var end_stream = (Int(flags) & Int(FLAG_END_STREAM)) != 0
+
+            var payload = Bytes()
+            if payload_len > 0:
+                self._read_exact(payload, payload_len)
+
+            if frame_type == FRAME_HEADERS and stream_id > 0:
+                var decoded = _hpack_decode_headers(payload^, self.hpack_dyn_table)
+                req.stream_id = stream_id
+                req.headers = decoded
+                req.path = req.headers.get(String(":path")).or_else(String(""))
+                req.is_end_stream = end_stream
+                if end_stream:
+                    return req^
+                break
+            elif frame_type == FRAME_SETTINGS:
+                if (Int(flags) & Int(FLAG_ACK)) == 0:
+                    _parse_settings_payload(payload, self.peer_max_frame_size, self.conn_window)
+                    var ack = _build_settings_ack()
+                    self.tls.write(Span(ack))
+            elif frame_type == FRAME_PING:
+                if (Int(flags) & Int(FLAG_ACK)) == 0:
+                    var pong = _build_frame(FRAME_PING, FLAG_ACK, 0, payload^)
+                    self.tls.write(Span(pong))
+            elif frame_type == FRAME_WINDOW_UPDATE:
+                if payload_len >= 4:
+                    self.conn_window += _read_u32_be(payload, 0) & 0x7FFFFFFF
+            elif frame_type == FRAME_GOAWAY:
+                raise Error("client sent GOAWAY")
+
+        # Read DATA frames for this stream
+        while not req.is_end_stream:
+            var frame_header = Bytes()
+            self._read_exact(frame_header, 9)
+            var payload_len = _read_u24_be(frame_header, 0)
+            var frame_type = frame_header[3]
+            var flags = frame_header[4]
+            var stream_id = _read_u32_be(frame_header, 5) & 0x7FFFFFFF
+            var end_stream = (Int(flags) & Int(FLAG_END_STREAM)) != 0
+
+            var payload = Bytes()
+            if payload_len > 0:
+                self._read_exact(payload, payload_len)
+
+            if frame_type == FRAME_DATA and stream_id == req.stream_id:
+                var start = len(req.body)
+                req.body.resize(start + len(payload), UInt8(0))
+                if len(payload) > 0:
+                    memcpy(dest=req.body.unsafe_ptr() + start, src=payload.unsafe_ptr(), count=len(payload))
+                if payload_len > 0:
+                    var wu = _build_window_update(0, payload_len)
+                    self.tls.write(Span(wu))
+                    var wus = _build_window_update(stream_id, payload_len)
+                    self.tls.write(Span(wus))
+                req.is_end_stream = end_stream
+            elif frame_type == FRAME_SETTINGS:
+                if (Int(flags) & Int(FLAG_ACK)) == 0:
+                    var ack = _build_settings_ack()
+                    self.tls.write(Span(ack))
+            elif frame_type == FRAME_WINDOW_UPDATE:
+                if payload_len >= 4:
+                    self.conn_window += _read_u32_be(payload, 0) & 0x7FFFFFFF
+            elif frame_type == FRAME_RST_STREAM:
+                raise Error("client cancelled stream")
+            elif frame_type == FRAME_PING:
+                if (Int(flags) & Int(FLAG_ACK)) == 0:
+                    var pong = _build_frame(FRAME_PING, FLAG_ACK, 0, payload^)
+                    self.tls.write(Span(pong))
+
+        return req^
+
+    fn send_response(
+        mut self, stream_id: Int,
+        status_code: Int, status_message: String,
+        response_body: Bytes,
+    ) raises:
+        """Send a full gRPC response: HEADERS + DATA + trailing HEADERS with grpc-status."""
+        # Initial response HEADERS
+        var resp_hpack = Bytes()
+        _hpack_encode_literal(resp_hpack, String(":status"), String("200"))
+        _hpack_encode_literal(resp_hpack, String("content-type"), String("application/grpc"))
+        var resp_headers_frame = _build_frame(FRAME_HEADERS, FLAG_END_HEADERS, stream_id, resp_hpack^)
+        self.tls.write(Span(resp_headers_frame))
+
+        # DATA frame(s) with response body
+        if len(response_body) > 0:
+            self._send_data_chunks(stream_id, response_body)
+
+        # Trailing HEADERS with grpc-status (END_STREAM)
+        var trailer_hpack = Bytes()
+        _hpack_encode_literal(trailer_hpack, String("grpc-status"), String(status_code))
+        if len(status_message) > 0:
+            _hpack_encode_literal(trailer_hpack, String("grpc-message"), status_message)
+        var trailer_frame = _build_frame(
+            FRAME_HEADERS, FLAG_END_HEADERS | FLAG_END_STREAM, stream_id, trailer_hpack^
+        )
+        self.tls.write(Span(trailer_frame))
+
+    fn send_error(mut self, stream_id: Int, status_code: Int, message: String) raises:
+        """Send a trailers-only error response."""
+        var hpack = Bytes()
+        _hpack_encode_literal(hpack, String(":status"), String("200"))
+        _hpack_encode_literal(hpack, String("content-type"), String("application/grpc"))
+        _hpack_encode_literal(hpack, String("grpc-status"), String(status_code))
+        if len(message) > 0:
+            _hpack_encode_literal(hpack, String("grpc-message"), message)
+        var frame = _build_frame(FRAME_HEADERS, FLAG_END_HEADERS | FLAG_END_STREAM, stream_id, hpack^)
+        self.tls.write(Span(frame))
+
+    fn send_rst_stream(mut self, stream_id: Int, error_code: Int) raises:
+        var frame = _build_rst_stream(stream_id, error_code)
+        self.tls.write(Span(frame))
+
+    fn send_data_frame(mut self, stream_id: Int, body: Bytes, end_stream: Bool) raises:
+        """Send a single DATA frame for streaming responses."""
+        var flags = FLAG_END_STREAM if end_stream else UInt8(0)
+        var frame = _build_frame(FRAME_DATA, flags, stream_id, body)
+        self.tls.write(Span(frame))
+
+    fn send_trailers(mut self, stream_id: Int, status_code: Int, message: String) raises:
+        """Send trailing HEADERS with grpc-status + END_STREAM."""
+        var hpack = Bytes()
+        _hpack_encode_literal(hpack, String("grpc-status"), String(status_code))
+        if len(message) > 0:
+            _hpack_encode_literal(hpack, String("grpc-message"), message)
+        var frame = _build_frame(FRAME_HEADERS, FLAG_END_HEADERS | FLAG_END_STREAM, stream_id, hpack^)
+        self.tls.write(Span(frame))
+
+    fn send_initial_headers(mut self, stream_id: Int) raises:
+        """Send initial response HEADERS (200 OK, content-type)."""
+        var hpack = Bytes()
+        _hpack_encode_literal(hpack, String(":status"), String("200"))
+        _hpack_encode_literal(hpack, String("content-type"), String("application/grpc"))
+        var frame = _build_frame(FRAME_HEADERS, FLAG_END_HEADERS, stream_id, hpack^)
+        self.tls.write(Span(frame))
+
+    fn _send_data_chunks(mut self, stream_id: Int, body: Bytes) raises:
+        """Send body as DATA frames respecting max frame size."""
+        var offset = 0
+        var total = len(body)
+        while offset < total:
+            var remaining = total - offset
+            var chunk_size = remaining
+            if chunk_size > self.peer_max_frame_size:
+                chunk_size = self.peer_max_frame_size
+
+            var chunk = Bytes()
+            chunk.resize(chunk_size, UInt8(0))
+            memcpy(dest=chunk.unsafe_ptr(), src=body.unsafe_ptr() + offset, count=chunk_size)
+
+            var frame = _build_frame(FRAME_DATA, UInt8(0), stream_id, chunk^)
+            self.tls.write(Span(frame))
+            offset += chunk_size
+
+    fn _read_exact(self, mut buf: Bytes, count: Int) raises:
+        var total = 0
+        while total < count:
+            var n = self.tls.read_into(buf, count - total)
             if n == 0:
                 raise Error("connection closed while reading")
             total += n
