@@ -23,7 +23,7 @@ backend = { name = "pixi-build-mojo", version = "*" }
 
 [dependencies]
 mojo = ">=0.26.2.0,<0.26.3.0"
-mo_protobuf = ">=0.1.0"
+mo_protobuf = { path = "../mo_protobuf" }
 openssl = ">=3.0,<4"
 
 [package.build-dependencies]
